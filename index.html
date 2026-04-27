@@ -168,7 +168,7 @@
     <div class="hint">Left side: drag joystick to move • Right side: swipe to look • Tap FIRE to shoot</div>
   </div>
 
-  <div id="settings-panel" class="editable">
+  <div id="settings-panel">
     <h2>Settings</h2>
     <div class="row">
       <label>Look Sensitivity: <span id="sens-val">1.0</span></label>
@@ -250,7 +250,6 @@ const SETTINGS = {
     ammo: { right: 90, bottom: 18 },
     minimap: { left: 12, top: 60 },
     settings: { left: 12 },
-    settingsPanel: {},
     joystick: { left: 80, bottom: 100 },
     shoot: { right: 30, bottom: 90 },
     jump: { right: 130, bottom: 30 },
@@ -567,12 +566,12 @@ function createEnemy(type, pos) {
   const legR = legL.clone();
   legR.position.x = 0.18*cfg.scale;
 
-  // Reliable hitboxes (invisible, slightly larger)
+  // Reliable per-limb hitboxes (invisible)
   const hitboxBody = new THREE.Mesh(
-    new THREE.BoxGeometry(0.95 * cfg.scale, 1.6 * cfg.scale, 0.95 * cfg.scale),
+    new THREE.BoxGeometry(0.8 * cfg.scale, 1.2 * cfg.scale, 0.7 * cfg.scale),
     new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
   );
-  hitboxBody.position.y = 0.85 * cfg.scale;
+  hitboxBody.position.y = 0.75 * cfg.scale;
   hitboxBody.userData.hitZone = 'body';
   const hitboxHead = new THREE.Mesh(
     new THREE.SphereGeometry(0.35 * cfg.scale, 8, 6),
@@ -580,8 +579,24 @@ function createEnemy(type, pos) {
   );
   hitboxHead.position.y = 1.35 * cfg.scale;
   hitboxHead.userData.hitZone = 'head';
+  const hitboxArmL = new THREE.Mesh(
+    new THREE.BoxGeometry(0.24 * cfg.scale, 0.85 * cfg.scale, 0.24 * cfg.scale),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
+  );
+  hitboxArmL.position.copy(armL.position);
+  hitboxArmL.userData.hitZone = 'arm';
+  const hitboxArmR = hitboxArmL.clone();
+  hitboxArmR.position.copy(armR.position);
+  const hitboxLegL = new THREE.Mesh(
+    new THREE.BoxGeometry(0.28 * cfg.scale, 0.62 * cfg.scale, 0.28 * cfg.scale),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
+  );
+  hitboxLegL.position.set(-0.18*cfg.scale, -0.1*cfg.scale, 0);
+  hitboxLegL.userData.hitZone = 'leg';
+  const hitboxLegR = hitboxLegL.clone();
+  hitboxLegR.position.x = 0.18*cfg.scale;
 
-  group.add(body, head, armL, armR, pistol, legL, legR, hitboxBody, hitboxHead);
+  group.add(body, head, armL, armR, pistol, legL, legR, hitboxBody, hitboxHead, hitboxArmL, hitboxArmR, hitboxLegL, hitboxLegR);
   group.position.copy(pos);
   // Glow outline (simple back-side scaled mesh)
   const glow = new THREE.Mesh(
@@ -592,7 +607,7 @@ function createEnemy(type, pos) {
   group.add(glow);
 
   scene.add(group);
-  [body, head, armL, armR, legL, legR, hitboxBody, hitboxHead].forEach((mesh) => { mesh.userData.enemyRef = group; });
+  [body, head, armL, armR, legL, legR, hitboxBody, hitboxHead, hitboxArmL, hitboxArmR, hitboxLegL, hitboxLegR].forEach((mesh) => { mesh.userData.enemyRef = group; });
 
   const roundMul = 1 + (STATE.round-1)*0.1;
   const speedMul = 1 + (STATE.round-1)*0.05;
@@ -600,7 +615,7 @@ function createEnemy(type, pos) {
   return {
     type,
     group,
-    body, head, armL, armR, pistol, legL, legR, hitboxBody, hitboxHead,
+    body, head, armL, armR, pistol, legL, legR, hitboxBody, hitboxHead, hitboxArmL, hitboxArmR, hitboxLegL, hitboxLegR,
     mat, hitMat,
     hp: cfg.hp * roundMul,
     maxHp: cfg.hp * roundMul,
@@ -804,7 +819,7 @@ function updateEnemies(dt) {
 
 function damageEnemy(e, dmg, isHead) {
   if (e.dying) return false;
-  const finalDmg = Math.round(isHead ? dmg * 2 : dmg);
+  const finalDmg = Math.round(dmg);
   e.hp -= finalDmg;
   e.hitFlashTime = 0.1;
   // Floating damage text
@@ -1036,19 +1051,21 @@ function shoot() {
   const aliveEnemyMeshes = [];
   for (const e of enemies) {
     if (e.dying) continue;
-    aliveEnemyMeshes.push(e.hitboxBody, e.hitboxHead);
+    aliveEnemyMeshes.push(e.hitboxBody, e.hitboxHead, e.hitboxArmL, e.hitboxArmR, e.hitboxLegL, e.hitboxLegR);
   }
   const enemyIntersections = raycaster.intersectObjects(aliveEnemyMeshes, false);
   if (enemyIntersections.length > 0) {
     const hit = enemyIntersections[0];
     const targetEnemy = enemies.find((e) =>
-      hit.object === e.hitboxBody || hit.object === e.hitboxHead
+      hit.object === e.hitboxBody || hit.object === e.hitboxHead ||
+      hit.object === e.hitboxArmL || hit.object === e.hitboxArmR ||
+      hit.object === e.hitboxLegL || hit.object === e.hitboxLegR
     );
     if (targetEnemy && !targetEnemy.dying) {
       closestDist = hit.distance;
       closestHit = {
         enemy: targetEnemy,
-        isHead: hit.object.userData.hitZone === 'head',
+        zone: hit.object.userData.hitZone || 'body',
         point: hit.point.clone(),
       };
     }
@@ -1065,7 +1082,7 @@ function shoot() {
       const off = target.distanceTo(closestPoint);
       if (off < Math.max(0.38, e.radius * 1.1) && hasLineOfSight(camera.position, target)) {
         closestDist = proj;
-        closestHit = { enemy: e, isHead: off < 0.24 * e.scale, point: closestPoint };
+        closestHit = { enemy: e, zone: off < 0.24 * e.scale ? 'head' : 'body', point: closestPoint };
       }
     }
   }
@@ -1092,10 +1109,12 @@ function shoot() {
 
   let shotEnd = camera.position.clone().add(dir.clone().multiplyScalar(60));
   if (closestHit && closestDist < obstacleDist) {
-    const damage = 25;
-    const killed = damageEnemy(closestHit.enemy, damage, closestHit.isHead);
+    const baseDamage = 25;
+    const zoneMul = closestHit.zone === 'head' ? 2.0 : closestHit.zone === 'leg' ? 0.8 : closestHit.zone === 'arm' ? 0.9 : 1.0;
+    const damage = Math.round(baseDamage * zoneMul);
+    const killed = damageEnemy(closestHit.enemy, damage, closestHit.zone === 'head');
     spawnImpactParticles(closestHit.point, 0xff8866);
-    showHitMarker(killed ? 'red' : (closestHit.isHead ? 'yellow' : 'white'));
+    showHitMarker(killed ? 'red' : (closestHit.zone === 'head' ? 'yellow' : 'white'));
     shotEnd = closestHit.point.clone();
   } else if (obstacleHit) {
     spawnImpactParticles(obstacleHit.point, 0xcccccc);
@@ -1619,7 +1638,11 @@ function setupActionButtons() {
   shootBtnEl.addEventListener('mouseup', onShootEnd);
   const onShootMove = (e) => {
     if (!shootBtn.active || editMode) return;
-    const t = e.changedTouches ? e.changedTouches[0] : e;
+    let t = e;
+    if (e.changedTouches) {
+      t = [...e.changedTouches].find((touch) => touch.identifier === shootBtn.touchId);
+      if (!t) return;
+    } else if (shootBtn.touchId !== 'mouse') return;
     const dx = t.clientX - shootBtn.lastX;
     const dy = t.clientY - shootBtn.lastY;
     shootBtn.lastX = t.clientX;
@@ -1676,7 +1699,11 @@ function setupActionButtons() {
   scopeEl.addEventListener('mouseup', onScopeEnd);
   const onScopeMove = (e) => {
     if (!scopeBtn.active || editMode) return;
-    const t = e.changedTouches ? e.changedTouches[0] : e;
+    let t = e;
+    if (e.changedTouches) {
+      t = [...e.changedTouches].find((touch) => touch.identifier === scopeBtn.touchId);
+      if (!t) return;
+    } else if (scopeBtn.touchId !== 'mouse') return;
     const dx = t.clientX - (scopeBtn.lastX ?? t.clientX);
     const dy = t.clientY - (scopeBtn.lastY ?? t.clientY);
     scopeBtn.lastX = t.clientX;
@@ -1800,7 +1827,6 @@ function applyLayout() {
     'ammo-wrap': SETTINGS.layout.ammo,
     'minimap': SETTINGS.layout.minimap,
     'settings-btn': SETTINGS.layout.settings,
-    'settings-panel': SETTINGS.layout.settingsPanel,
     'joystick-base': SETTINGS.layout.joystick,
     'shoot-btn': SETTINGS.layout.shoot,
     'jump-btn': SETTINGS.layout.jump,
@@ -1813,9 +1839,6 @@ function applyLayout() {
     el.style.right = typeof p.right === 'number' ? p.right + 'px' : '';
     el.style.top = typeof p.top === 'number' ? p.top + 'px' : '';
     el.style.bottom = typeof p.bottom === 'number' ? p.bottom + 'px' : '';
-    if (id === 'settings-panel') {
-      el.style.transform = (typeof p.left === 'number' || typeof p.top === 'number') ? 'none' : 'translate(-50%,-50%)';
-    }
   }
 }
 
@@ -1879,7 +1902,6 @@ function setupSettings() {
       ammo: { right: 90, bottom: 18 },
       minimap: { left: 12, top: 60 },
       settings: { left: 12 },
-      settingsPanel: {},
       joystick: { left: 80, bottom: 100 },
       shoot: { right: 30, bottom: 90 },
       jump: { right: 130, bottom: 30 },
@@ -1898,7 +1920,7 @@ function setupSettings() {
   });
 
   // Edit mode drag
-  ['health-wrap','score-wrap','round-wrap','ammo-wrap','minimap','settings-btn','settings-panel','joystick-base','shoot-btn','jump-btn','scope-btn','reload-btn'].forEach(id => {
+  ['health-wrap','score-wrap','round-wrap','ammo-wrap','minimap','settings-btn','joystick-base','shoot-btn','jump-btn','scope-btn','reload-btn'].forEach(id => {
     const el = document.getElementById(id);
     const layoutKeyMap = {
       'health-wrap': 'health',
@@ -1907,7 +1929,6 @@ function setupSettings() {
       'ammo-wrap': 'ammo',
       'minimap': 'minimap',
       'settings-btn': 'settings',
-      'settings-panel': 'settingsPanel',
       'joystick-base': 'joystick',
       'shoot-btn': 'shoot',
       'jump-btn': 'jump',
@@ -1933,7 +1954,6 @@ function setupSettings() {
       el.style.top = y + 'px';
       el.style.right = '';
       el.style.bottom = '';
-      if (id === 'settings-panel') el.style.transform = 'none';
       // Save exact position
       SETTINGS.layout[layoutKey] = {
         left: x,
@@ -1973,7 +1993,6 @@ function loadSettings() {
           ammo: { ...SETTINGS.layout.ammo, ...(parsed.layout.ammo || {}) },
           minimap: { ...SETTINGS.layout.minimap, ...(parsed.layout.minimap || {}) },
           settings: { ...SETTINGS.layout.settings, ...(parsed.layout.settings || {}) },
-          settingsPanel: { ...SETTINGS.layout.settingsPanel, ...(parsed.layout.settingsPanel || {}) },
           shoot: { ...SETTINGS.layout.shoot, ...(parsed.layout.shoot || {}) },
           jump: { ...SETTINGS.layout.jump, ...(parsed.layout.jump || {}) },
           scope: { ...SETTINGS.layout.scope, ...(parsed.layout.scope || {}) },
