@@ -1086,6 +1086,29 @@ function shoot() {
       }
     }
   }
+  // Final fallback: screen-space lock near crosshair center
+  if (!closestHit) {
+    let best = null;
+    for (const e of enemies) {
+      if (e.dying) continue;
+      const p = e.group.position.clone().add(new THREE.Vector3(0, e.headOffset * 0.9, 0)).project(camera);
+      if (p.z < -1 || p.z > 1) continue;
+      const dx = p.x; // crosshair center is 0,0 in NDC
+      const dy = p.y;
+      const ndcDist = Math.hypot(dx, dy);
+      if (ndcDist > 0.08) continue;
+      const target = e.group.position.clone().add(new THREE.Vector3(0, e.bodyOffset + 0.35, 0));
+      if (!hasLineOfSight(camera.position, target)) continue;
+      const worldDist = camera.position.distanceTo(target);
+      if (!best || ndcDist < best.ndcDist || (Math.abs(ndcDist - best.ndcDist) < 0.01 && worldDist < best.worldDist)) {
+        best = { e, ndcDist, worldDist, point: target };
+      }
+    }
+    if (best) {
+      closestDist = best.worldDist;
+      closestHit = { enemy: best.e, zone: 'body', point: best.point.clone() };
+    }
+  }
 
   // Check obstacle hits (only if closer than enemy)
   let obstacleHit = null;
