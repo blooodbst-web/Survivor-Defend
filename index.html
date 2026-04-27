@@ -36,6 +36,8 @@
   #crosshair::before { left: 50%; top: 0; width: 2px; height: 100%; transform: translateX(-50%); }
   #crosshair::after { top: 50%; left: 0; height: 2px; width: 100%; transform: translateY(-50%); }
   #crosshair-dot { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 3px; height: 3px; background: #ffd54a; border-radius: 50%; }
+  body.scoped #crosshair::before, body.scoped #crosshair::after { display: none; }
+  body.scoped #crosshair-dot { width: 9px; height: 9px; background: #ff2222; box-shadow: 0 0 8px rgba(255,0,0,0.9); }
 
   #hit-marker { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 28px; font-weight: 900; color: white; opacity: 0; pointer-events: none; text-shadow: 0 0 8px rgba(0,0,0,0.8); transition: opacity 0.05s; }
   #scope-overlay { position: absolute; inset: 0; display: none; pointer-events: none; z-index: 12; background:
@@ -91,6 +93,11 @@
   #settings-panel button.primary { background: #ffcc44; color: #000; font-weight: 700; }
   #settings-panel .toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; }
   #settings-panel .toggle input { width: 18px; height: 18px; }
+  #settings-panel.compact { width: 230px; padding: 12px; }
+  #settings-panel.compact h2 { font-size: 18px; margin-bottom: 10px; }
+  #settings-panel.compact .row { margin-bottom: 8px; }
+  #settings-panel.compact .btn-row { margin-top: 8px; }
+  #settings-panel.compact button { padding: 8px; font-size: 13px; }
 
   #damage-overlay { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 80px rgba(255,0,0,0); transition: box-shadow 0.2s; z-index: 5; }
 
@@ -161,7 +168,7 @@
     <div class="hint">Left side: drag joystick to move • Right side: swipe to look • Tap FIRE to shoot</div>
   </div>
 
-  <div id="settings-panel">
+  <div id="settings-panel" class="editable">
     <h2>Settings</h2>
     <div class="row">
       <label>Look Sensitivity: <span id="sens-val">1.0</span></label>
@@ -243,6 +250,7 @@ const SETTINGS = {
     ammo: { right: 90, bottom: 18 },
     minimap: { left: 12, top: 60 },
     settings: { left: 12 },
+    settingsPanel: {},
     joystick: { left: 80, bottom: 100 },
     shoot: { right: 30, bottom: 90 },
     jump: { right: 130, bottom: 30 },
@@ -559,7 +567,21 @@ function createEnemy(type, pos) {
   const legR = legL.clone();
   legR.position.x = 0.18*cfg.scale;
 
-  group.add(body, head, armL, armR, pistol, legL, legR);
+  // Reliable hitboxes (invisible, slightly larger)
+  const hitboxBody = new THREE.Mesh(
+    new THREE.BoxGeometry(0.95 * cfg.scale, 1.6 * cfg.scale, 0.95 * cfg.scale),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
+  );
+  hitboxBody.position.y = 0.85 * cfg.scale;
+  hitboxBody.userData.hitZone = 'body';
+  const hitboxHead = new THREE.Mesh(
+    new THREE.SphereGeometry(0.35 * cfg.scale, 8, 6),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
+  );
+  hitboxHead.position.y = 1.35 * cfg.scale;
+  hitboxHead.userData.hitZone = 'head';
+
+  group.add(body, head, armL, armR, pistol, legL, legR, hitboxBody, hitboxHead);
   group.position.copy(pos);
   // Glow outline (simple back-side scaled mesh)
   const glow = new THREE.Mesh(
@@ -570,7 +592,7 @@ function createEnemy(type, pos) {
   group.add(glow);
 
   scene.add(group);
-  [body, head, armL, armR, legL, legR].forEach((mesh) => { mesh.userData.enemyRef = group; });
+  [body, head, armL, armR, legL, legR, hitboxBody, hitboxHead].forEach((mesh) => { mesh.userData.enemyRef = group; });
 
   const roundMul = 1 + (STATE.round-1)*0.1;
   const speedMul = 1 + (STATE.round-1)*0.05;
@@ -578,7 +600,7 @@ function createEnemy(type, pos) {
   return {
     type,
     group,
-    body, head, armL, armR, pistol, legL, legR,
+    body, head, armL, armR, pistol, legL, legR, hitboxBody, hitboxHead,
     mat, hitMat,
     hp: cfg.hp * roundMul,
     maxHp: cfg.hp * roundMul,
@@ -1014,14 +1036,13 @@ function shoot() {
   const aliveEnemyMeshes = [];
   for (const e of enemies) {
     if (e.dying) continue;
-    aliveEnemyMeshes.push(e.body, e.head, e.armL, e.armR, e.legL, e.legR);
+    aliveEnemyMeshes.push(e.hitboxBody, e.hitboxHead);
   }
   const enemyIntersections = raycaster.intersectObjects(aliveEnemyMeshes, false);
   if (enemyIntersections.length > 0) {
     const hit = enemyIntersections[0];
     const targetEnemy = enemies.find((e) =>
-      hit.object === e.body || hit.object === e.head || hit.object === e.armL ||
-      hit.object === e.armR || hit.object === e.legL || hit.object === e.legR
+      hit.object === e.hitboxBody || hit.object === e.hitboxHead
     );
     if (targetEnemy && !targetEnemy.dying) {
       closestDist = hit.distance;
@@ -1449,12 +1470,13 @@ function setScoped(enabled) {
   scopeBtn.active = enabled;
   const scopeEl = document.getElementById('scope-btn');
   scopeEl.classList.toggle('active', enabled);
-  camera.fov = enabled ? 40 : 75;
+  camera.fov = enabled ? 58 : 75;
   camera.updateProjectionMatrix();
-  document.getElementById('scope-overlay').style.display = enabled ? 'block' : 'none';
-  document.getElementById('crosshair').style.opacity = enabled ? 0.25 : 1;
-  document.getElementById('crosshair-dot').style.transform = enabled ? 'translate(-50%, -50%) scale(0.7)' : 'translate(-50%, -50%) scale(1)';
-  gunGroup.visible = !enabled;
+  document.body.classList.toggle('scoped', enabled);
+  document.getElementById('scope-overlay').style.display = enabled ? 'none' : 'none';
+  document.getElementById('crosshair').style.opacity = 1;
+  document.getElementById('crosshair-dot').style.transform = 'translate(-50%, -50%) scale(1)';
+  gunGroup.visible = true;
 }
 
 function setupJoystick() {
@@ -1741,6 +1763,7 @@ let editMode = false;
 function setEditMode(enabled) {
   editMode = enabled;
   document.getElementById('edit-mode-overlay').style.display = editMode ? 'block' : 'none';
+  document.getElementById('settings-panel').classList.toggle('compact', editMode);
   document.querySelectorAll('.editable').forEach(el => el.classList.toggle('editing', editMode));
   if (!editMode) {
     document.body.style.cursor = '';
@@ -1777,6 +1800,7 @@ function applyLayout() {
     'ammo-wrap': SETTINGS.layout.ammo,
     'minimap': SETTINGS.layout.minimap,
     'settings-btn': SETTINGS.layout.settings,
+    'settings-panel': SETTINGS.layout.settingsPanel,
     'joystick-base': SETTINGS.layout.joystick,
     'shoot-btn': SETTINGS.layout.shoot,
     'jump-btn': SETTINGS.layout.jump,
@@ -1789,6 +1813,9 @@ function applyLayout() {
     el.style.right = typeof p.right === 'number' ? p.right + 'px' : '';
     el.style.top = typeof p.top === 'number' ? p.top + 'px' : '';
     el.style.bottom = typeof p.bottom === 'number' ? p.bottom + 'px' : '';
+    if (id === 'settings-panel') {
+      el.style.transform = (typeof p.left === 'number' || typeof p.top === 'number') ? 'none' : 'translate(-50%,-50%)';
+    }
   }
 }
 
@@ -1852,6 +1879,7 @@ function setupSettings() {
       ammo: { right: 90, bottom: 18 },
       minimap: { left: 12, top: 60 },
       settings: { left: 12 },
+      settingsPanel: {},
       joystick: { left: 80, bottom: 100 },
       shoot: { right: 30, bottom: 90 },
       jump: { right: 130, bottom: 30 },
@@ -1870,7 +1898,7 @@ function setupSettings() {
   });
 
   // Edit mode drag
-  ['health-wrap','score-wrap','round-wrap','ammo-wrap','minimap','settings-btn','joystick-base','shoot-btn','jump-btn','scope-btn','reload-btn'].forEach(id => {
+  ['health-wrap','score-wrap','round-wrap','ammo-wrap','minimap','settings-btn','settings-panel','joystick-base','shoot-btn','jump-btn','scope-btn','reload-btn'].forEach(id => {
     const el = document.getElementById(id);
     const layoutKeyMap = {
       'health-wrap': 'health',
@@ -1879,6 +1907,7 @@ function setupSettings() {
       'ammo-wrap': 'ammo',
       'minimap': 'minimap',
       'settings-btn': 'settings',
+      'settings-panel': 'settingsPanel',
       'joystick-base': 'joystick',
       'shoot-btn': 'shoot',
       'jump-btn': 'jump',
@@ -1904,6 +1933,7 @@ function setupSettings() {
       el.style.top = y + 'px';
       el.style.right = '';
       el.style.bottom = '';
+      if (id === 'settings-panel') el.style.transform = 'none';
       // Save exact position
       SETTINGS.layout[layoutKey] = {
         left: x,
@@ -1943,6 +1973,7 @@ function loadSettings() {
           ammo: { ...SETTINGS.layout.ammo, ...(parsed.layout.ammo || {}) },
           minimap: { ...SETTINGS.layout.minimap, ...(parsed.layout.minimap || {}) },
           settings: { ...SETTINGS.layout.settings, ...(parsed.layout.settings || {}) },
+          settingsPanel: { ...SETTINGS.layout.settingsPanel, ...(parsed.layout.settingsPanel || {}) },
           shoot: { ...SETTINGS.layout.shoot, ...(parsed.layout.shoot || {}) },
           jump: { ...SETTINGS.layout.jump, ...(parsed.layout.jump || {}) },
           scope: { ...SETTINGS.layout.scope, ...(parsed.layout.scope || {}) },
