@@ -214,7 +214,7 @@ const PLAYER = {
   gravity: 22,
   ammo: 30,
   magSize: 30,
-  reserve: Infinity,
+  reserve: 180,
   reloading: false,
   fireRate: 0.12,
   lastShotTime: 0,
@@ -242,6 +242,7 @@ const particles = [];
 const floatingTexts = [];
 const obstacles = []; // {min, max} AABB for collision
 const ARENA_SIZE = 50;
+let roundCountdownInterval = null;
 
 // ============================================================================
 // AUDIO SYSTEM (Web Audio API)
@@ -850,7 +851,7 @@ function updateShake(dt) {
 // ============================================================================
 const raycaster = new THREE.Raycaster();
 function shoot() {
-  if (STATE.gameOver || STATE.betweenRounds || !STATE.running) return;
+  if (STATE.gameOver || STATE.betweenRounds || !STATE.running || STATE.paused) return;
   const now = performance.now() / 1000;
   if (now - PLAYER.lastShotTime < PLAYER.fireRate) return;
   if (PLAYER.reloading) return;
@@ -867,6 +868,7 @@ function shoot() {
       osc.connect(gain); gain.connect(audioCtx.destination);
       osc.start(t); osc.stop(t + 0.04);
     }
+    if (PLAYER.reserve > 0) reload();
     return;
   }
   PLAYER.lastShotTime = now;
@@ -995,7 +997,7 @@ function aabbNormal(point, o) {
 }
 
 function reload() {
-  if (PLAYER.reloading || PLAYER.ammo === PLAYER.magSize || STATE.gameOver) return;
+  if (PLAYER.reloading || PLAYER.ammo === PLAYER.magSize || STATE.gameOver || PLAYER.reserve <= 0) return;
   PLAYER.reloading = true;
   playReload();
   const reloadEl = document.getElementById('reload-progress');
@@ -1012,7 +1014,10 @@ function reload() {
     gunGroup.position.y = -0.28 - Math.sin(t*Math.PI) * 0.2;
     if (t < 1) requestAnimationFrame(tick);
     else {
-      PLAYER.ammo = PLAYER.magSize;
+      const needed = PLAYER.magSize - PLAYER.ammo;
+      const loaded = Math.min(needed, PLAYER.reserve);
+      PLAYER.ammo += loaded;
+      PLAYER.reserve -= loaded;
       PLAYER.reloading = false;
       reloadEl.style.display = 'none';
       gunGroup.position.y = -0.28;
@@ -1151,7 +1156,7 @@ function updateDrops(dt) {
         PLAYER.hp = Math.min(PLAYER.maxHp, PLAYER.hp + 30);
         spawnFloatingText('+30 HP', PLAYER.pos.clone().add(new THREE.Vector3(0, 0.5, 0)), '#33ff66');
       } else {
-        PLAYER.ammo = Math.min(PLAYER.magSize, PLAYER.ammo + 30);
+        PLAYER.reserve += 30;
         spawnFloatingText('+30 AMMO', PLAYER.pos.clone().add(new THREE.Vector3(0, 0.5, 0)), '#ffaa22');
       }
       scene.remove(d.mesh);
@@ -1184,11 +1189,13 @@ function checkRoundEnd() {
     banner.style.display = 'flex';
     let count = 5;
     document.getElementById('round-countdown').textContent = count;
-    const interval = setInterval(() => {
+    if (roundCountdownInterval) clearInterval(roundCountdownInterval);
+    roundCountdownInterval = setInterval(() => {
       count--;
       document.getElementById('round-countdown').textContent = count;
       if (count <= 0) {
-        clearInterval(interval);
+        clearInterval(roundCountdownInterval);
+        roundCountdownInterval = null;
         startRound(STATE.round + 1);
       }
     }, 1000);
@@ -1228,7 +1235,9 @@ function updateUI() {
   document.getElementById('score-val').textContent = STATE.score;
   document.getElementById('round-val').textContent = STATE.round;
   const ammoEl = document.getElementById('ammo-mag');
+  const reserveEl = document.getElementById('ammo-reserve');
   ammoEl.textContent = PLAYER.ammo;
+  reserveEl.textContent = Number.isFinite(PLAYER.reserve) ? PLAYER.reserve : '∞';
   ammoEl.className = PLAYER.ammo === 0 ? 'empty' : '';
 }
 
@@ -1246,6 +1255,10 @@ function triggerGameOver() {
 }
 
 function resetGame() {
+  if (roundCountdownInterval) {
+    clearInterval(roundCountdownInterval);
+    roundCountdownInterval = null;
+  }
   // Clear enemies, drops, particles, decals
   enemies.forEach(e => scene.remove(e.group));
   enemies.length = 0;
@@ -1264,6 +1277,7 @@ function resetGame() {
   PLAYER.pitch = 0;
   PLAYER.hp = PLAYER.maxHp;
   PLAYER.ammo = PLAYER.magSize;
+  PLAYER.reserve = 180;
   PLAYER.reloading = false;
   PLAYER.recoil = 0;
   PLAYER.damageFlash = 0;
@@ -1653,7 +1667,20 @@ function loadSettings() {
     const s = localStorage.getItem('fps_settings');
     if (s) {
       const parsed = JSON.parse(s);
-      Object.assign(SETTINGS, parsed);
+      if (typeof parsed.sensitivity === 'number') SETTINGS.sensitivity = parsed.sensitivity;
+      if (typeof parsed.hudScale === 'number') SETTINGS.hudScale = parsed.hudScale;
+      if (typeof parsed.joystickSize === 'number') SETTINGS.joystickSize = parsed.joystickSize;
+      if (typeof parsed.aimAssist === 'boolean') SETTINGS.aimAssist = parsed.aimAssist;
+      if (parsed.layout && typeof parsed.layout === 'object') {
+        SETTINGS.layout = {
+          ...SETTINGS.layout,
+          ...parsed.layout,
+          joystick: { ...SETTINGS.layout.joystick, ...(parsed.layout.joystick || {}) },
+          shoot: { ...SETTINGS.layout.shoot, ...(parsed.layout.shoot || {}) },
+          jump: { ...SETTINGS.layout.jump, ...(parsed.layout.jump || {}) },
+          reload: { ...SETTINGS.layout.reload, ...(parsed.layout.reload || {}) },
+        };
+      }
     }
     const hs = localStorage.getItem('fps_highscore');
     if (hs) STATE.highScore = parseInt(hs);
