@@ -1599,9 +1599,75 @@ function createDropMesh(type,mat,color){
     lid.position.y=.15;
     g.add(box,lid); return g;
   }
-  if(type==='shield')return new THREE.Mesh(new THREE.CylinderGeometry(.24,.24,.14,6),mat);
+  if(type==='shield'){
+    const grp=new THREE.Group();
+    const outerShape=new THREE.Shape();
+    outerShape.moveTo(0,.42);
+    outerShape.bezierCurveTo(.27,.36,.34,.08,.3,-.12);
+    outerShape.bezierCurveTo(.24,-.34,.12,-.52,0,-.62);
+    outerShape.bezierCurveTo(-.12,-.52,-.24,-.34,-.3,-.12);
+    outerShape.bezierCurveTo(-.34,.08,-.27,.36,0,.42);
+    const outerGeo=new THREE.ExtrudeGeometry(outerShape,{depth:.06,bevelEnabled:true,bevelSize:.018,bevelThickness:.016,bevelSegments:3});
+    outerGeo.center();
+    const outer=new THREE.Mesh(outerGeo,new THREE.MeshLambertMaterial({color:0x1f4f9b,emissive:0x1f4f9b,emissiveIntensity:.45}));
+
+    const innerShape=new THREE.Shape();
+    innerShape.moveTo(0,.29);
+    innerShape.bezierCurveTo(.19,.25,.24,.06,.21,-.08);
+    innerShape.bezierCurveTo(.17,-.23,.09,-.34,0,-.42);
+    innerShape.bezierCurveTo(-.09,-.34,-.17,-.23,-.21,-.08);
+    innerShape.bezierCurveTo(-.24,.06,-.19,.25,0,.29);
+    const innerGeo=new THREE.ShapeGeometry(innerShape);
+    const inner=new THREE.Mesh(innerGeo,new THREE.MeshBasicMaterial({map:createShieldFaceTex(),transparent:true,color:0xa3f2ff}));
+    inner.position.z=.045;
+
+    const glyph=new THREE.Sprite(new THREE.SpriteMaterial({map:createShieldGlyphTex(),transparent:true,depthWrite:false,color:0xb2ffff}));
+    glyph.scale.set(.42,.42,1);
+    glyph.position.set(0,-.02,.08);
+
+    grp.add(outer,inner,glyph);
+    return grp;
+  }
   if(type==='speed')return new THREE.Mesh(new THREE.OctahedronGeometry(.24,0),mat);
   return new THREE.Mesh(new THREE.SphereGeometry(.22,8,8),mat);
+}
+
+function createShieldFaceTex(){
+  const c=document.createElement('canvas'); c.width=256; c.height=256;
+  const ctx=c.getContext('2d');
+  const g=ctx.createRadialGradient(128,116,18,128,140,126);
+  g.addColorStop(0,'rgba(160,250,255,.95)');
+  g.addColorStop(.45,'rgba(85,190,255,.78)');
+  g.addColorStop(1,'rgba(34,110,210,.42)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,256,256);
+  ctx.strokeStyle='rgba(140,245,255,.85)';
+  ctx.lineWidth=6;
+  ctx.beginPath(); ctx.moveTo(128,30);
+  ctx.bezierCurveTo(196,44,218,120,202,178);
+  ctx.bezierCurveTo(184,226,154,246,128,252);
+  ctx.bezierCurveTo(102,246,72,226,54,178);
+  ctx.bezierCurveTo(38,120,60,44,128,30);
+  ctx.stroke();
+  return new THREE.CanvasTexture(c);
+}
+
+function createShieldGlyphTex(){
+  const c=document.createElement('canvas'); c.width=256; c.height=256;
+  const ctx=c.getContext('2d');
+  ctx.clearRect(0,0,256,256);
+  ctx.strokeStyle='rgba(170,255,255,.95)';
+  ctx.lineWidth=8;
+  ctx.lineCap='round';
+  ctx.beginPath();
+  ctx.moveTo(128,195); ctx.lineTo(128,85);
+  ctx.moveTo(128,104); ctx.bezierCurveTo(95,90,78,114,82,143);
+  ctx.moveTo(128,104); ctx.bezierCurveTo(161,90,178,114,174,143);
+  ctx.moveTo(128,150); ctx.bezierCurveTo(92,146,71,160,66,186);
+  ctx.moveTo(128,150); ctx.bezierCurveTo(164,146,185,160,190,186);
+  ctx.moveTo(128,196); ctx.bezierCurveTo(108,176,94,170,74,170);
+  ctx.moveTo(128,196); ctx.bezierCurveTo(148,176,162,170,182,170);
+  ctx.stroke();
+  return new THREE.CanvasTexture(c);
 }
 
 function createLabelTex(text,color){
