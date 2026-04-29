@@ -1833,8 +1833,8 @@ function drawMinimap(){
   ctx.clearRect(0,0,W,H);
   ctx.fillStyle='rgba(20,28,20,.6)'; ctx.fillRect(0,0,W,H);
   const range=32, scale=(W/2)/range, cx=W/2, cy=H/2;
-  const cosY=Math.cos(-PLAYER.yaw), sinY=Math.sin(-PLAYER.yaw);
-  const toMM=(wx,wz)=>{const ox=wx-PLAYER.pos.x,oz=wz-PLAYER.pos.z;return[cx+(ox*cosY-oz*sinY)*scale,cy+(ox*sinY+oz*cosY)*scale];};
+  // North-up minimap: world stays fixed, player arrow rotates with camera yaw
+  const toMM=(wx,wz)=>{const ox=wx-PLAYER.pos.x,oz=wz-PLAYER.pos.z;return[cx+ox*scale,cy+oz*scale];};
   ctx.fillStyle='rgba(100,110,120,.7)';
   for(let i=4;i<obstacles.length;i++){
     const o=obstacles[i],mx=(o.min.x+o.max.x)/2,mz=(o.min.z+o.max.z)/2;
@@ -1854,9 +1854,14 @@ function drawMinimap(){
     ctx.fillStyle=d.type==='medkit'?'#33ff66':d.type==='ammo'?'#ffaa22':'#aa88ff';
     ctx.fillRect(px-2,py-2,4,4);
   }
+  // Player direction arrow (matches camera view direction)
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.rotate(PLAYER.yaw);
   ctx.fillStyle='white'; ctx.strokeStyle='rgba(240,192,64,.8)'; ctx.lineWidth=1.5;
-  ctx.beginPath(); ctx.moveTo(cx,cy-9); ctx.lineTo(cx-5,cy+5); ctx.lineTo(cx+5,cy+5); ctx.closePath();
+  ctx.beginPath(); ctx.moveTo(0,-9); ctx.lineTo(-5,5); ctx.lineTo(5,5); ctx.closePath();
   ctx.fill(); ctx.stroke();
+  ctx.restore();
 }
 
 // ============================================================
