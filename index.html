@@ -354,6 +354,21 @@ input[type=range]::-webkit-slider-thumb{
   .toggle-row{margin-bottom:10px}
   .settings-btns{margin-top:10px}
 }
+@media (max-height: 680px){
+  #settings-panel{
+    width:min(340px,94vw);
+    border-radius:10px;
+    padding:10px;
+    max-height:calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 10px);
+  }
+  #settings-panel h2{font-size:14px;letter-spacing:1px;margin-bottom:8px}
+  .setting-row{margin-bottom:8px}
+  .setting-label{font-size:11px}
+  .toggle-row{margin-bottom:8px;font-size:11px}
+  .settings-btns{gap:6px;margin-top:8px}
+  .settings-btns button{padding:8px;font-size:10px}
+  .gfx-presets button{padding:7px 4px;font-size:9px}
+}
 </style>
 </head>
 <body>
@@ -1974,9 +1989,14 @@ function setEditMode(en){
 }
 
 function setupSettings(){
-  const openPause=()=>{document.getElementById('settings-panel').style.display='block';STATE.paused=true;};
-  const closePause=()=>{setEditMode(false);document.getElementById('settings-panel').style.display='none';STATE.paused=false;saveSettings();};
-  document.getElementById('settings-btn').addEventListener('click',e=>{if(editMode)return;e.stopPropagation();openPause();});
+  const panel=document.getElementById('settings-panel');
+  const openPause=()=>{panel.style.display='block';STATE.paused=true;};
+  const closePause=()=>{setEditMode(false);panel.style.display='none';STATE.paused=false;saveSettings();};
+  document.getElementById('settings-btn').addEventListener('click',e=>{
+    if(editMode)return;
+    e.stopPropagation();
+    if(panel.style.display==='block')closePause(); else openPause();
+  });
   document.getElementById('close-settings').addEventListener('click',()=>closePause());
   document.getElementById('resume-btn').addEventListener('click',()=>closePause());
   document.getElementById('restart-now-btn').addEventListener('click',()=>{closePause();resetGame();});
