@@ -331,6 +331,9 @@ input[type=range]::-webkit-slider-thumb{
 .settings-btns button{flex:1;padding:10px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.7);border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:11px;cursor:pointer;font-family:'Orbitron',monospace;transition:.1s}
 .settings-btns button:active{background:rgba(255,255,255,0.12)}
 .settings-btns button.primary{background:rgba(240,192,64,0.2);color:#f0c040;border-color:rgba(240,192,64,0.4)}
+.gfx-presets{display:flex;gap:6px;margin-top:8px}
+.gfx-presets button{flex:1;padding:8px 6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:7px;color:rgba(255,255,255,.7);font-size:10px;font-family:'Orbitron',monospace}
+.gfx-presets button.active{background:rgba(240,192,64,0.2);color:#f0c040;border-color:rgba(240,192,64,0.45)}
 
 /* ── EDIT MODE ── */
 #edit-overlay{position:absolute;top:64px;left:50%;transform:translateX(-50%);background:rgba(240,192,64,0.9);color:#000;padding:6px 16px;border-radius:20px;font-weight:700;display:none;pointer-events:none;z-index:26;font-family:'Orbitron',monospace;font-size:12px;letter-spacing:1px}
@@ -515,6 +518,11 @@ input[type=range]::-webkit-slider-thumb{
     <div class="setting-row">
       <div class="setting-label">GRAPHICS QUALITY <span id="gfx-val">MEDIUM</span></div>
       <input type="range" id="gfx-slider" min="0" max="2" step="1" value="1" />
+      <div class="gfx-presets">
+        <button id="gfx-low">LOW</button>
+        <button id="gfx-medium">MEDIUM</button>
+        <button id="gfx-high">HIGH</button>
+      </div>
     </div>
     <div class="settings-btns">
       <button id="edit-layout-btn">EDIT LAYOUT</button>
@@ -1918,7 +1926,11 @@ function setupSettings(){
   document.getElementById('vibration-toggle').addEventListener('change',e=>{SETTINGS.vibration=e.target.checked;});
   document.getElementById('autoreload-toggle').addEventListener('change',e=>{SETTINGS.autoReload=e.target.checked;});
   const gfxS=document.getElementById('gfx-slider');
-  gfxS.addEventListener('input',e=>{SETTINGS.graphics=parseInt(e.target.value);applyGraphicsSettings();document.getElementById('gfx-val').textContent=GFX_PROFILES[SETTINGS.graphics].name;});
+  gfxS.addEventListener('input',e=>{SETTINGS.graphics=parseInt(e.target.value);applyGraphicsSettings();syncGraphicsUI();});
+  const setGfxPreset=lvl=>{SETTINGS.graphics=lvl;applyGraphicsSettings();syncGraphicsUI();saveSettings();};
+  document.getElementById('gfx-low').addEventListener('click',()=>setGfxPreset(0));
+  document.getElementById('gfx-medium').addEventListener('click',()=>setGfxPreset(1));
+  document.getElementById('gfx-high').addEventListener('click',()=>setGfxPreset(2));
 
   // Draggable elements
   const dragMap={
@@ -1980,6 +1992,7 @@ function resetLayout(){
   document.getElementById('joy-slider').value=130; document.getElementById('joy-val').textContent='130';
   document.getElementById('gfx-slider').value=1; document.getElementById('gfx-val').textContent='MEDIUM';
   applyGraphicsSettings();
+  syncGraphicsUI();
   applyLayout();
 }
 
@@ -2010,10 +2023,23 @@ function loadSettings(){
   document.getElementById('aim-assist').checked=SETTINGS.aimAssist;
   document.getElementById('vibration-toggle').checked=SETTINGS.vibration;
   document.getElementById('autoreload-toggle').checked=SETTINGS.autoReload;
-  document.getElementById('gfx-slider').value=SETTINGS.graphics;
-  document.getElementById('gfx-val').textContent=GFX_PROFILES[SETTINGS.graphics].name;
+  syncGraphicsUI();
 }
 function saveSettings(){try{localStorage.setItem('wfx_settings',JSON.stringify(SETTINGS));}catch(e){}}
+function syncGraphicsUI(){
+  document.getElementById('gfx-slider').value=SETTINGS.graphics;
+  document.getElementById('gfx-val').textContent=GFX_PROFILES[SETTINGS.graphics].name;
+  document.getElementById('gfx-low').classList.toggle('active',SETTINGS.graphics===0);
+  document.getElementById('gfx-medium').classList.toggle('active',SETTINGS.graphics===1);
+  document.getElementById('gfx-high').classList.toggle('active',SETTINGS.graphics===2);
+}
+function detectDefaultGraphics(){
+  const cores=Math.max(1,Math.min(16,navigator.hardwareConcurrency||4));
+  const dpr=devicePixelRatio||1;
+  if(cores<=4||dpr<=1.2)return 0;
+  if(cores>=8&&dpr>=2)return 2;
+  return 1;
+}
 function applyGraphicsSettings(){
   graphicsProfile=GFX_PROFILES[SETTINGS.graphics]||GFX_PROFILES[1];
   if(scene){
@@ -2071,6 +2097,13 @@ function onResize(){
 // ============================================================
 function init(){
   loadSettings();
+  const firstLaunch=!localStorage.getItem('wfx_quality_set');
+  if(firstLaunch){
+    SETTINGS.graphics=detectDefaultGraphics();
+    try{localStorage.setItem('wfx_quality_set','1');}catch(e){}
+    saveSettings();
+  }
+  syncGraphicsUI();
   applyGraphicsSettings();
   initScene();
   initArena();
