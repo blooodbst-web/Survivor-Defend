@@ -516,6 +516,14 @@ input[type=range]::-webkit-slider-thumb{
       <label class="toggle"><input type="checkbox" id="autoreload-toggle" checked /><span class="toggle-slider"></span></label>
     </div>
     <div class="setting-row">
+      <div class="setting-label">SFX VOLUME <span id="sfx-val">80%</span></div>
+      <input type="range" id="sfx-slider" min="0" max="1" step="0.05" value="0.8" />
+    </div>
+    <div class="setting-row">
+      <div class="setting-label">MUSIC VOLUME <span id="music-val">50%</span></div>
+      <input type="range" id="music-slider" min="0" max="1" step="0.05" value="0.5" />
+    </div>
+    <div class="setting-row">
       <div class="setting-label">GRAPHICS QUALITY <span id="gfx-val">MEDIUM</span></div>
       <input type="range" id="gfx-slider" min="0" max="2" step="1" value="1" />
       <div class="gfx-presets">
@@ -527,6 +535,11 @@ input[type=range]::-webkit-slider-thumb{
     <div class="settings-btns">
       <button id="edit-layout-btn">EDIT LAYOUT</button>
       <button id="reset-layout-btn">RESET</button>
+    </div>
+    <div class="settings-btns">
+      <button id="resume-btn">RESUME</button>
+      <button id="restart-now-btn">RESTART</button>
+      <button id="quit-run-btn">QUIT RUN</button>
     </div>
     <div class="settings-btns">
       <button class="primary" id="close-settings">DONE</button>
@@ -566,6 +579,7 @@ const STATE = {
   killsThisRound:0, killsNeeded:10,
   killStreak:0, lastKillTime:0, lastSpawnTime:0, spawnCooldown:1.6,
   grenades:3,
+  graceUntil:0, recentDamageHits:0, lastDamageAt:0, forceMedkitDrop:false,
 };
 
 const PLAYER = {
@@ -591,6 +605,7 @@ const PLAYER = {
 const SETTINGS = {
   sensitivity:1.0, joystickSize:130,
   aimAssist:false, vibration:true, autoReload:true,
+  sfxVol:.8, musicVol:.5,
   graphics:1, // 0 low, 1 medium, 2 high
   layout:{
     minimap:{left:14,top:68},
@@ -622,6 +637,7 @@ let frameCounter=0;
 // AUDIO
 // ============================================================
 let audioCtx=null;
+let musicGainNode=null, masterMusicOsc=null, heartbeatTimer=null;
 function initAudio(){if(!audioCtx)try{audioCtx=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}}
 function _noise(dur,vol,freq){
   if(!audioCtx)return;
@@ -629,14 +645,16 @@ function _noise(dur,vol,freq){
   for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,1.5);
   const src=audioCtx.createBufferSource(), g=audioCtx.createGain(), f=audioCtx.createBiquadFilter();
   src.buffer=buf; f.type='bandpass'; f.frequency.value=freq; f.Q.value=0.5;
-  g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  const out=Math.max(0,Math.min(1,SETTINGS.sfxVol||0));
+  g.gain.setValueAtTime(vol*out,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
   src.connect(f); f.connect(g); g.connect(audioCtx.destination); src.start(t);
 }
 function _tone(freq,dur,vol,type='sine'){
   if(!audioCtx)return;
   const t=audioCtx.currentTime, o=audioCtx.createOscillator(), g=audioCtx.createGain();
   o.type=type; o.frequency.setValueAtTime(freq,t);
-  g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  const out=Math.max(0,Math.min(1,SETTINGS.sfxVol||0));
+  g.gain.setValueAtTime(vol*out,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
   o.connect(g); g.connect(audioCtx.destination); o.start(t); o.stop(t+dur);
 }
 const snd={
@@ -649,6 +667,16 @@ const snd={
   pickup:()=>[440,660].forEach((f,i)=>{setTimeout(()=>_tone(f,.1,.1,'sine'),i*60)}),
   grenade:()=>[_noise(.08,.5,600),setTimeout(()=>_noise(.6,.7,200),80)],
 };
+function initMusic(){
+  if(!audioCtx||musicGainNode)return;
+  musicGainNode=audioCtx.createGain();
+  musicGainNode.gain.value=(SETTINGS.musicVol||0)*.08;
+  musicGainNode.connect(audioCtx.destination);
+  masterMusicOsc=audioCtx.createOscillator();
+  masterMusicOsc.type='triangle'; masterMusicOsc.frequency.value=72;
+  masterMusicOsc.connect(musicGainNode); masterMusicOsc.start();
+}
+function updateMusicVolume(){if(musicGainNode)musicGainNode.gain.value=(SETTINGS.musicVol||0)*.08;}
 function vib(ms){if(SETTINGS.vibration&&navigator.vibrate)navigator.vibrate(ms)}
 
 // ============================================================
@@ -1152,7 +1180,7 @@ function explodeGrenade(pos){
     if(d<r){const dmg=Math.round(120*(1-d/r));damageEnemy(e,dmg,false);}
   }
   const distToPlayer=PLAYER.pos.distanceTo(pos);
-  if(distToPlayer<r)damagePlayer(Math.round(60*(1-distToPlayer/r)));
+  if(distToPlayer<r)damagePlayer(Math.round(60*(1-distToPlayer/r)),pos.clone());
   showHitMarker('red');
 }
 
@@ -1210,7 +1238,7 @@ function createEnemy(type,pos){
     radius:.42*sc, headOff:1.22*sc, bodyOff:.55*sc, height:1.48*sc, scale:sc,
     lastAttack:0, atkCD:cfg.atk, hitFlash:0,
     walkPhase:Math.random()*Math.PI*2, armRecoil:0,
-    dying:false, dieT:0,
+    dying:false, dieT:0, flankDir:Math.random()<.5?-1:1,
   };
 }
 
@@ -1251,9 +1279,10 @@ function updateEnemies(dt){
       const canSee=hasLOS(e.group.position.clone().add(new THREE.Vector3(0,e.headOff,0)),PLAYER.pos.clone().add(new THREE.Vector3(0,.2,0)));
       let dirX=dx/dist, dirZ=dz/dist;
       if(canSee){
-        if(dist<e.speed*.65*e.atkCD){dirX*=-.8;dirZ*=-.8;}
-        else if(dist<e.speed*3){const s=Math.sin(performance.now()*.0018+e.walkPhase)>0?1:-1;dirX=dirZ*s*.7+dirX*.3;dirZ=-dx/dist*s*.7+dirZ*.3;}
-      }
+        if(e.hp/e.maxHp<.28&&dist<12){dirX*=-1.05;dirZ*=-1.05;} // retreat
+        else if(dist<e.speed*.65*e.atkCD){dirX*=-.8;dirZ*=-.8;}
+        else if(dist<e.speed*3){const s=(Math.random()<.03?e.flankDir*=-1:e.flankDir);dirX=dirZ*s*.7+dirX*.3;dirZ=-dx/dist*s*.7+dirZ*.3;}
+      }else{const s=(Math.sin(now+e.walkPhase)>0?1:-1);dirX=dirX*.45+(-dz/dist)*s*.55;dirZ=dirZ*.45+(dx/dist)*s*.55;}
       const mv=e.speed*dt;
       const np=e.group.position.clone();
       np.x+=dirX*mv; np.z+=dirZ*mv;
@@ -1343,8 +1372,9 @@ function killEnemy(e){
   // Kill feed entry
   addKillFeed(e.type,false);
   // Loot
+  const forceMed=STATE.forceMedkitDrop;
   const r=Math.random();
-  if(r<.32)spawnDrop('medkit',e.group.position.clone());
+  if(forceMed||r<.32){spawnDrop('medkit',e.group.position.clone());STATE.forceMedkitDrop=false;}
   else if(r<.52)spawnDrop('ammo',e.group.position.clone());
   else if(r<.62)spawnDrop(['speed','infammo','shield'][Math.floor(Math.random()*3)],e.group.position.clone());
   // Grenade refill rare
@@ -1352,11 +1382,25 @@ function killEnemy(e){
   updateUI();
 }
 
-function damagePlayer(dmg){
+function damagePlayer(dmg,fromPos=null){
   if(STATE.gameOver)return;
+  const now=performance.now()/1000;
+  if(now<STATE.graceUntil)return;
   if(PLAYER.effects.shield>0){spawnFloatingText('SHIELD!',PLAYER.pos.clone().add(new THREE.Vector3(0,.8,0)),'#66ddff');return;}
   PLAYER.hp=Math.max(0,PLAYER.hp-dmg);
   PLAYER.damageFlash=.55; doShake(.18); vib(55); snd.hit();
+  if(fromPos){
+    const fwd=new THREE.Vector3(Math.sin(PLAYER.yaw),0,Math.cos(PLAYER.yaw));
+    const right=new THREE.Vector3(fwd.z,0,-fwd.x);
+    const dir=fromPos.clone().sub(PLAYER.pos).setY(0).normalize();
+    _tone(right.dot(dir)>0?980:620,.06,.11,'square');
+  }
+  if(now-STATE.lastDamageAt<3)STATE.recentDamageHits++; else STATE.recentDamageHits=1;
+  STATE.lastDamageAt=now;
+  if(STATE.recentDamageHits>=4)STATE.forceMedkitDrop=true;
+  const hpPct=PLAYER.hp/PLAYER.maxHp;
+  if(heartbeatTimer){clearTimeout(heartbeatTimer);heartbeatTimer=null;}
+  if(hpPct<=.35&&!STATE.paused){const beat=()=>{if(STATE.gameOver||STATE.paused)return;_tone(55,.08,.16,'sine');heartbeatTimer=setTimeout(beat,Math.max(260,900*hpPct));};beat();}
   if(!graphicsProfile.damageOverlay)PLAYER.damageFlash=0;
   if(PLAYER.hp<=0)triggerGameOver();
   updateUI();
@@ -1385,7 +1429,7 @@ function updateEnemyBullets(dt){
     // Swept obstacle check
     if(bulletHitsObstacle(prev,p)){spawnImpactFx(p,0xff8855);scene.remove(b.mesh);enemyBullets.splice(i,1);continue;}
     // Hit player
-    if(p.distanceToSquared(PLAYER.pos)<1.1){damagePlayer(b.dmg);scene.remove(b.mesh);enemyBullets.splice(i,1);continue;}
+    if(p.distanceToSquared(PLAYER.pos)<1.1){damagePlayer(b.dmg,b.mesh.position.clone());scene.remove(b.mesh);enemyBullets.splice(i,1);continue;}
     spawnTracer(prev,p.clone(),0xff5533,.07);
     b.prevPos=p.clone();
   }
@@ -1655,6 +1699,7 @@ function startRound(n){
   STATE.round=n; STATE.killsThisRound=0;
   STATE.killsNeeded=n===1?10:n===2?18:n===3?28:n*9;
   STATE.betweenRounds=false; STATE.lastSpawnTime=0;
+  STATE.graceUntil=performance.now()/1000+2;
   document.getElementById('round-banner').style.display='none';
   spawnWave(); updateUI();
 }
@@ -1674,7 +1719,9 @@ function checkRoundEnd(){
     return;
   }
   const rem=STATE.killsNeeded-STATE.killsThisRound-enemies.length;
-  if(rem>0&&now-STATE.lastSpawnTime>STATE.spawnCooldown){STATE.lastSpawnTime=now;spawnWave();}
+  const hpRatio=Math.max(.15,PLAYER.hp/PLAYER.maxHp);
+  const adaptiveCooldown=STATE.spawnCooldown+(hpRatio<.35?.95:hpRatio<.6?.35:0);
+  if(rem>0&&now-STATE.lastSpawnTime>adaptiveCooldown){STATE.lastSpawnTime=now;spawnWave();}
 }
 
 // ============================================================
@@ -1763,7 +1810,7 @@ function resetGame(){
   PLAYER.effects={speed:0,infAmmo:0,shield:0};
   STATE.score=0; STATE.killStreak=0; STATE.totalKills=0;
   STATE.gameOver=false; STATE.betweenRounds=false; STATE.lastSpawnTime=0;
-  STATE.grenades=3; updateGrenadeUI();
+  STATE.grenades=3; STATE.graceUntil=performance.now()/1000+2; STATE.recentDamageHits=0; STATE.lastDamageAt=0; STATE.forceMedkitDrop=false; updateGrenadeUI();
 
   document.getElementById('game-over').style.display='none';
   document.getElementById('round-banner').style.display='none';
@@ -1911,8 +1958,13 @@ function setEditMode(en){
 }
 
 function setupSettings(){
-  document.getElementById('settings-btn').addEventListener('click',e=>{if(editMode)return;e.stopPropagation();document.getElementById('settings-panel').style.display='block';STATE.paused=true;});
-  document.getElementById('close-settings').addEventListener('click',()=>{setEditMode(false);document.getElementById('settings-panel').style.display='none';STATE.paused=false;saveSettings();});
+  const openPause=()=>{document.getElementById('settings-panel').style.display='block';STATE.paused=true;};
+  const closePause=()=>{setEditMode(false);document.getElementById('settings-panel').style.display='none';STATE.paused=false;saveSettings();};
+  document.getElementById('settings-btn').addEventListener('click',e=>{if(editMode)return;e.stopPropagation();openPause();});
+  document.getElementById('close-settings').addEventListener('click',()=>closePause());
+  document.getElementById('resume-btn').addEventListener('click',()=>closePause());
+  document.getElementById('restart-now-btn').addEventListener('click',()=>{closePause();resetGame();});
+  document.getElementById('quit-run-btn').addEventListener('click',()=>{closePause();triggerGameOver();});
   document.getElementById('edit-layout-btn').addEventListener('click',()=>{setEditMode(!editMode);if(!editMode)saveSettings();});
   document.getElementById('reset-layout-btn').addEventListener('click',()=>{resetLayout();saveSettings();});
 
@@ -1925,6 +1977,8 @@ function setupSettings(){
   document.getElementById('aim-assist').addEventListener('change',e=>{SETTINGS.aimAssist=e.target.checked;});
   document.getElementById('vibration-toggle').addEventListener('change',e=>{SETTINGS.vibration=e.target.checked;});
   document.getElementById('autoreload-toggle').addEventListener('change',e=>{SETTINGS.autoReload=e.target.checked;});
+  document.getElementById('sfx-slider').addEventListener('input',e=>{SETTINGS.sfxVol=parseFloat(e.target.value);document.getElementById('sfx-val').textContent=Math.round(SETTINGS.sfxVol*100)+'%';});
+  document.getElementById('music-slider').addEventListener('input',e=>{SETTINGS.musicVol=parseFloat(e.target.value);document.getElementById('music-val').textContent=Math.round(SETTINGS.musicVol*100)+'%';updateMusicVolume();});
   const gfxS=document.getElementById('gfx-slider');
   gfxS.addEventListener('input',e=>{SETTINGS.graphics=parseInt(e.target.value);applyGraphicsSettings();syncGraphicsUI();});
   const setGfxPreset=lvl=>{SETTINGS.graphics=lvl;applyGraphicsSettings();syncGraphicsUI();saveSettings();};
@@ -2009,6 +2063,8 @@ function loadSettings(){
       if(typeof p.aimAssist==='boolean')SETTINGS.aimAssist=p.aimAssist;
       if(typeof p.vibration==='boolean')SETTINGS.vibration=p.vibration;
       if(typeof p.autoReload==='boolean')SETTINGS.autoReload=p.autoReload;
+      if(typeof p.sfxVol==='number'&&Number.isFinite(p.sfxVol))SETTINGS.sfxVol=Math.min(1,Math.max(0,p.sfxVol));
+      if(typeof p.musicVol==='number'&&Number.isFinite(p.musicVol))SETTINGS.musicVol=Math.min(1,Math.max(0,p.musicVol));
       if(typeof p.graphics==='number'&&Number.isFinite(p.graphics))SETTINGS.graphics=Math.min(2,Math.max(0,Math.round(p.graphics)));
       if(p.layout&&typeof p.layout==='object')Object.assign(SETTINGS.layout,p.layout);
     }
@@ -2023,6 +2079,8 @@ function loadSettings(){
   document.getElementById('aim-assist').checked=SETTINGS.aimAssist;
   document.getElementById('vibration-toggle').checked=SETTINGS.vibration;
   document.getElementById('autoreload-toggle').checked=SETTINGS.autoReload;
+  document.getElementById('sfx-slider').value=SETTINGS.sfxVol; document.getElementById('sfx-val').textContent=Math.round(SETTINGS.sfxVol*100)+'%';
+  document.getElementById('music-slider').value=SETTINGS.musicVol; document.getElementById('music-val').textContent=Math.round(SETTINGS.musicVol*100)+'%';
   syncGraphicsUI();
 }
 function saveSettings(){try{localStorage.setItem('wfx_settings',JSON.stringify(SETTINGS));}catch(e){}}
@@ -2121,6 +2179,7 @@ function init(){
 
   document.getElementById('start-btn').addEventListener('click',()=>{
     initAudio(); if(audioCtx?.state==='suspended')audioCtx.resume();
+    initMusic(); updateMusicVolume();
     try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();}catch(e){}
     document.getElementById('start-screen').style.display='none';
     STATE.running=true; startRound(1);
@@ -2129,6 +2188,7 @@ function init(){
 
   document.getElementById('restart-btn').addEventListener('click',()=>{
     initAudio(); if(audioCtx?.state==='suspended')audioCtx.resume();
+    initMusic(); updateMusicVolume();
     resetGame();
   });
 
