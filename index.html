@@ -309,7 +309,9 @@ canvas{display:block;position:absolute;top:0;left:0}
   display:none;z-index:25;pointer-events:auto;backdrop-filter:blur(16px);
   overflow:auto;-webkit-overflow-scrolling:touch;
   padding-bottom:max(20px,env(safe-area-inset-bottom));
+  touch-action:pan-y;
 }
+#settings-panel *{touch-action:auto}
 #settings-panel h2{font-size:16px;color:#f0c040;margin-bottom:16px;font-family:'Orbitron',monospace;letter-spacing:2px}
 .setting-row{margin-bottom:14px}
 .setting-label{display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,0.6);margin-bottom:5px;font-family:'Orbitron',monospace}
@@ -1897,6 +1899,8 @@ function lookDelta(dx,dy){
 
 function setupGlobalInput(){
   const onMove=e=>{
+    const tgt=e.target;
+    if(tgt&&tgt.closest&&tgt.closest('#settings-panel'))return;
     if(e.cancelable)e.preventDefault();
     for(const t of e.changedTouches){
       const id=t.identifier;
@@ -1907,6 +1911,8 @@ function setupGlobalInput(){
     }
   };
   const onEnd=e=>{
+    const tgt=e.target;
+    if(tgt&&tgt.closest&&tgt.closest('#settings-panel'))return;
     for(const t of e.changedTouches){
       const id=t.identifier;
       if(joystick.active&&joystick.tid===id)resetJoystick();
@@ -1990,6 +1996,7 @@ function setEditMode(en){
 
 function setupSettings(){
   const panel=document.getElementById('settings-panel');
+  let panelDragId=null, panelStartY=0, panelStartTop=0;
   const openPause=()=>{panel.style.display='block';STATE.paused=true;};
   const closePause=()=>{setEditMode(false);panel.style.display='none';STATE.paused=false;saveSettings();};
   document.getElementById('settings-btn').addEventListener('click',e=>{
@@ -2001,6 +2008,27 @@ function setupSettings(){
   document.getElementById('resume-btn').addEventListener('click',()=>closePause());
   document.getElementById('restart-now-btn').addEventListener('click',()=>{closePause();resetGame();});
   document.getElementById('quit-run-btn').addEventListener('click',()=>{closePause();triggerGameOver();});
+
+  // Drag settings panel vertically without edit mode (except when interacting controls)
+  panel.addEventListener('touchstart',e=>{
+    const touch=e.changedTouches[0];
+    const interactive=e.target.closest('input,button,label,.toggle,.gfx-presets,.settings-btns');
+    if(interactive)return;
+    panelDragId=touch.identifier; panelStartY=touch.clientY;
+    panelStartTop=panel.getBoundingClientRect().top;
+  },{passive:true});
+  panel.addEventListener('touchmove',e=>{
+    if(panelDragId===null)return;
+    const touch=[...e.changedTouches].find(t=>t.identifier===panelDragId);
+    if(!touch)return;
+    const h=panel.offsetHeight;
+    const maxTop=Math.max(8,innerHeight-h-8);
+    const nextTop=Math.max(8,Math.min(maxTop,panelStartTop+(touch.clientY-panelStartY)));
+    panel.style.top=nextTop+'px';
+    panel.style.transform='translateX(-50%)';
+  },{passive:true});
+  panel.addEventListener('touchend',e=>{if([...e.changedTouches].some(t=>t.identifier===panelDragId))panelDragId=null;});
+  panel.addEventListener('touchcancel',e=>{if([...e.changedTouches].some(t=>t.identifier===panelDragId))panelDragId=null;});
   document.getElementById('edit-layout-btn').addEventListener('click',()=>{setEditMode(!editMode);if(!editMode)saveSettings();});
   document.getElementById('reset-layout-btn').addEventListener('click',()=>{resetLayout();saveSettings();});
 
