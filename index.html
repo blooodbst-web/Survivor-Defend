@@ -703,6 +703,7 @@ let scene, camera, renderer, gunGroup, muzzleFlash;
 const enemies=[], drops=[], decals=[], particles=[], tracers=[], enemyBullets=[], floatingTexts=[];
 const obstacles=[];
 let isScoped=false, roundCountdownTimer=null;
+let autoReloadTimer=null;
 let graphicsProfile={pixelRatio:1.2,shadows:true,shadowSize:1024,particleMul:1,scopeRate:1,fog:'medium',minimapRate:1,dropGlow:true,damageOverlay:true,tracerMul:1};
 
 const GFX_PROFILES=[
@@ -717,6 +718,15 @@ let frameCounter=0;
 // ============================================================
 let audioCtx=null;
 let musicGainNode=null, masterMusicOsc=null, heartbeatTimer=null;
+let musicLfoOsc=null, musicLfoGain=null;
+
+function isUIOpen(){
+  return document.getElementById('settings-panel').style.display==='block'||
+    document.getElementById('round-banner').style.display==='flex'||
+    document.getElementById('game-over').style.display==='flex'||
+    document.getElementById('start-screen').style.display!=='none'||
+    editMode;
+}
 
 function initAudio(){
   if(!audioCtx)try{audioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}
@@ -762,7 +772,14 @@ function initMusic(){
   musicGainNode.connect(audioCtx.destination);
   masterMusicOsc=audioCtx.createOscillator();
   masterMusicOsc.type='triangle'; masterMusicOsc.frequency.value=72;
+  musicLfoOsc=audioCtx.createOscillator();
+  musicLfoOsc.type='sine'; musicLfoOsc.frequency.value=.1;
+  musicLfoGain=audioCtx.createGain();
+  musicLfoGain.gain.value=7;
+  musicLfoOsc.connect(musicLfoGain);
+  musicLfoGain.connect(masterMusicOsc.frequency);
   masterMusicOsc.connect(musicGainNode); masterMusicOsc.start();
+  musicLfoOsc.start();
 }
 
 function updateMusicVolume(){
@@ -1077,6 +1094,7 @@ function shoot(){
   if(STATE.gameOver||STATE.betweenRounds||!STATE.running||STATE.paused)return;
   const now=performance.now()/1000, cfg=wcfg();
   if(now-PLAYER.lastShotTime<cfg.fire)return;
+  if(autoReloadTimer){clearTimeout(autoReloadTimer);autoReloadTimer=null;}
   if(PLAYER.reloading)return;
   const hasAmmo=PLAYER.effects.infAmmo>0||PLAYER.ammo>0||cfg.reserve===Infinity;
   if(!hasAmmo){snd.dry();if(SETTINGS.autoReload&&PLAYER.reserve>0)reload();return;}
@@ -1140,8 +1158,9 @@ function shoot(){
   }
   if(anyHit)showHitMarker(anyKill?'red':anyHead?'yellow':'white');
   updateUI();
-  if(PLAYER.ammo<=0&&SETTINGS.autoReload&&PLAYER.reserve>0&&!PLAYER.reloading)
-    setTimeout(reload,120);
+  if(PLAYER.ammo<=0&&SETTINGS.autoReload&&PLAYER.reserve>0&&!PLAYER.reloading){
+    autoReloadTimer=setTimeout(()=>{autoReloadTimer=null; reload();},120);
+  }
 }
 
 function raycastEnemies(dir){
@@ -1175,6 +1194,7 @@ function raycastEnemies(dir){
 // RELOAD
 // ============================================================
 function reload(){
+  if(autoReloadTimer){clearTimeout(autoReloadTimer);autoReloadTimer=null;}
   const cfg=wcfg();
   if(PLAYER.reloading||PLAYER.ammo>=cfg.mag||STATE.gameOver||cfg.reserve===Infinity)return;
   if(PLAYER.reserve<=0){return;}
@@ -1773,6 +1793,10 @@ function checkRoundEnd(){
   if(STATE.gameOver||STATE.betweenRounds)return;
   if(STATE.killsThisRound>=STATE.killsNeeded&&enemies.every(e=>e.dying)){
     STATE.betweenRounds=true;
+    PLAYER.hp=Math.min(PLAYER.maxHp,PLAYER.hp+PLAYER.maxHp*0.28);
+    STATE.grenades=Math.min(3,STATE.grenades+1);
+    updateGrenadeUI();
+    updateUI();
     snd.roundComplete();
     document.getElementById('round-banner-text').textContent=`ROUND ${STATE.round} COMPLETE`;
     document.getElementById('round-stats-text').innerHTML=`Kills: <span>${STATE.killsThisRound}</span> | Score: <span>${STATE.score}</span>`;
@@ -1858,6 +1882,7 @@ function triggerGameOver(){
   document.getElementById('go-kills').textContent=STATE.totalKills;
   document.getElementById('game-over').style.display='flex';
   document.getElementById('reload-progress').style.display='none';
+  if(audioCtx?.state==='running')audioCtx.suspend();
   setScoped(false);
   hpBars.forEach(b=>b.wrap.remove()); hpBars.clear();
 }
@@ -1879,6 +1904,7 @@ function resetGame(){
   PLAYER.pos.set(0,PLAYER.height,0); PLAYER.vel.set(0,0,0);
   PLAYER.yaw=0; PLAYER.pitch=0; PLAYER.hp=PLAYER.maxHp;
   PLAYER.reloading=false; PLAYER.reloadAborted=true; // signal any lingering reload to stop
+  if(autoReloadTimer){clearTimeout(autoReloadTimer);autoReloadTimer=null;}
   PLAYER.recoil=0; PLAYER.damageFlash=0;
   PLAYER.weapon='rifle';
   PLAYER.weapons={pistol:{ammo:12,reserve:Infinity},rifle:{ammo:30,reserve:180},ak47:{ammo:35,reserve:210},shotgun:{ammo:8,reserve:48}};
@@ -1917,7 +1943,7 @@ const scopePad={active:false,tid:null,lx:0,ly:0};
 function setupJoystick(){
   const base=document.getElementById('joystick-base');
   base.addEventListener('touchstart',e=>{
-    if(editMode||joystick.active)return;
+    if(isUIOpen()||joystick.active)return;
     e.preventDefault(); e.stopPropagation();
     const t=e.changedTouches[0];
     joystick.active=true; joystick.tid=t.identifier;
@@ -1954,6 +1980,7 @@ function lookDelta(dx,dy){
 // touching the settings panel (touchend target = panel → old code returned early)
 function setupGlobalInput(){
   const onMove=e=>{
+    if(isUIOpen())return;
     // Only block default / process game movement when NOT over UI panels
     const tgt=e.target;
     if(tgt&&tgt.closest){
@@ -1987,7 +2014,7 @@ function setupGlobalInput(){
 // FIX: setupLookPad now excludes settings panel and all overlay screens
 function setupLookPad(){
   document.addEventListener('touchstart',e=>{
-    if(editMode)return;
+    if(isUIOpen())return;
     // Don't activate look in non-playing states
     if(!STATE.running||STATE.paused||STATE.gameOver||STATE.betweenRounds)return;
     if(lookPad.active)return;
@@ -2014,7 +2041,7 @@ function setupButtons(){
   const bindPress=(id,fn,onRelease=null)=>{
     const el=document.getElementById(id);
     el.addEventListener('touchstart',e=>{
-      if(editMode)return;
+      if(isUIOpen())return;
       e.preventDefault(); e.stopPropagation();
       fn(e);
     },{passive:false});
@@ -2029,7 +2056,7 @@ function setupButtons(){
   // FIRE: touch and drag aims, hold to shoot
   const fireEl=document.getElementById('fire-btn');
   fireEl.addEventListener('touchstart',e=>{
-    if(editMode)return; e.preventDefault(); e.stopPropagation();
+    if(isUIOpen())return; e.preventDefault(); e.stopPropagation();
     const t=e.changedTouches[0];
     shootPad.active=true; shootPad.tid=t.identifier; shootPad.lx=t.clientX; shootPad.ly=t.clientY;
     shoot();
@@ -2049,7 +2076,7 @@ function setupButtons(){
   // SCOPE: hold to scope
   const scopeEl=document.getElementById('scope-btn');
   scopeEl.addEventListener('touchstart',e=>{
-    if(editMode)return; e.preventDefault(); e.stopPropagation();
+    if(isUIOpen())return; e.preventDefault(); e.stopPropagation();
     const t=e.changedTouches[0];
     scopePad.active=true; scopePad.tid=t.identifier; scopePad.lx=t.clientX; scopePad.ly=t.clientY;
     setScoped(true);
@@ -2067,7 +2094,7 @@ function setupButtons(){
   // WEAPON SLOTS
   document.querySelectorAll('.weapon-slot').forEach(sl=>{
     sl.addEventListener('touchstart',e=>{
-      if(editMode)return; e.preventDefault(); e.stopPropagation();
+      if(isUIOpen())return; e.preventDefault(); e.stopPropagation();
       selectWeapon(sl.dataset.weapon);
     },{passive:false});
     sl.addEventListener('click',()=>{if(!editMode)selectWeapon(sl.dataset.weapon);});
@@ -2166,10 +2193,12 @@ function setupSettings(){
     // Reset scroll position
     panel.scrollTop=0;
     STATE.paused=true;
+    if(audioCtx?.state==='running')audioCtx.suspend();
   };
   const closePause=()=>{
     panel.style.display='none';
     STATE.paused=false;
+    if(audioCtx?.state==='suspended')audioCtx.resume();
     saveSettings();
   };
 
