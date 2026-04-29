@@ -712,6 +712,7 @@ const GFX_PROFILES=[
   {name:'HIGH',   pixelRatio:1.8, shadows:true,  shadowSize:1024, particleMul:1.15, scopeRate:1, fog:'high',   minimapRate:1, dropGlow:true,  damageOverlay:true,  tracerMul:1.15},
 ];
 let frameCounter=0;
+const POWERUP_DURATION=10;
 
 // ============================================================
 // AUDIO
@@ -1705,9 +1706,9 @@ function applyDrop(type){
     const cfg=wcfg();
     if(cfg.reserve!==Infinity)PLAYER.reserve=Math.min(PLAYER.reserve+cfg.mag,cfg.reserve*3);
   }
-  else if(type==='speed')PLAYER.effects.speed=6;
-  else if(type==='infammo')PLAYER.effects.infAmmo=6;
-  else if(type==='shield')PLAYER.effects.shield=10;
+  else if(type==='speed')PLAYER.effects.speed=POWERUP_DURATION;
+  else if(type==='infammo')PLAYER.effects.infAmmo=POWERUP_DURATION;
+  else if(type==='shield')PLAYER.effects.shield=POWERUP_DURATION;
   spawnFloatingText(msgs[type]||'+??',PLAYER.pos.clone().add(new THREE.Vector3(0,.6,0)),cols[type]||'#fff');
 }
 
@@ -1820,7 +1821,7 @@ function updatePowerups(dt){
   document.getElementById('powerup-bar').innerHTML=pills.map(p=>`<div class="powerup-pill ${p.cls}">${p.text}</div>`).join('');
   const sw=document.getElementById('shield-bar-wrap');
   sw.style.display=PLAYER.effects.shield>0?'block':'none';
-  document.getElementById('shield-bar-fill').style.width=(Math.min(1,PLAYER.effects.shield/10)*100)+'%';
+  document.getElementById('shield-bar-fill').style.width=(Math.min(1,PLAYER.effects.shield/POWERUP_DURATION)*100)+'%';
 }
 
 // ============================================================
