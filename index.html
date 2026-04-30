@@ -678,7 +678,7 @@ const GRAVITY = 22;
 
 const WEAPON_CFG = {
   pistol:  { name:'PISTOL',  dmg:18,  fire:.22, recoil:.25, spread:.006, scopeFov:60, mag:12, reserve:Infinity, pellets:1,  auto:false, icon:'🔫' },
-  rifle:   { name:'AWM',     dmg:92,  fire:1.05,recoil:1.05,spread:.0018,scopeFov:22, mag:5,  reserve:35,       pellets:1,  auto:false, icon:'🎯' },
+  rifle:   { name:'AWM',     dmg:128, fire:1.05,recoil:1.05,spread:.0018,scopeFov:22, mag:5,  reserve:35,       pellets:1,  auto:false, icon:'🎯' },
   ak47:    { name:'AK-47',   dmg:31,  fire:.09, recoil:.55, spread:.007, scopeFov:50, mag:35, reserve:210,      pellets:1,  auto:true,  icon:'⚔️' },
   shotgun: { name:'SHOTGUN', dmg:14,  fire:.55, recoil:.90, spread:.06,  scopeFov:65, mag:8,  reserve:48,       pellets:8,  auto:false, icon:'💥' },
 };
@@ -687,7 +687,7 @@ const ENEMY_CFG = {
   normal:{ hp:100, spd:2.5, dmg:10, clr:0xdd2233, sc:1.0,  rng:17, atk:1.1 },
   fast:  { hp:55,  spd:4.5, dmg:7,  clr:0xff7722, sc:0.85, rng:14, atk:0.75 },
   tank:  { hp:260, spd:1.4, dmg:18, clr:0x9922cc, sc:1.3,  rng:19, atk:1.4 },
-  sniper:{ hp:80,  spd:1.8, dmg:30, clr:0x2266ff, sc:0.95, rng:36, atk:1.8 },
+  sniper:{ hp:80,  spd:1.8, dmg:36, clr:0x2266ff, sc:0.95, rng:36, atk:1.8 },
   boss:  { hp:1600,spd:1.5, dmg:24, clr:0x35a2ff, sc:1.9,  rng:28, atk:1.2 },
 };
 
@@ -1508,6 +1508,26 @@ function createEnemy(type,pos){
     legL.material=new THREE.MeshLambertMaterial({color:0x5a644a});
     legR.material=legL.material;
     group.add(helmet,visor,shoulderL,shoulderR,vest,belt);
+  }
+  if(type==='tank'){
+    const crown=new THREE.Mesh(new THREE.CylinderGeometry(.24*sc,.26*sc,.1*sc,7),new THREE.MeshLambertMaterial({color:0x8a6738}));
+    crown.position.y=1.55*sc;
+    const mask=new THREE.Mesh(new THREE.BoxGeometry(.44*sc,.34*sc,.2*sc),new THREE.MeshLambertMaterial({color:0x3f454f}));
+    mask.position.set(0,1.24*sc,.13*sc);
+    const eyeL=new THREE.Mesh(new THREE.SphereGeometry(.045*sc,6,6),new THREE.MeshBasicMaterial({color:0xd546ff}));
+    const eyeR=eyeL.clone();
+    eyeL.position.set(-.09*sc,1.25*sc,.24*sc); eyeR.position.set(.09*sc,1.25*sc,.24*sc);
+    const core=new THREE.Mesh(new THREE.BoxGeometry(.62*sc,.42*sc,.08*sc),new THREE.MeshBasicMaterial({color:0xcf46ff}));
+    core.position.set(0,.64*sc,.24*sc);
+    const rune1=new THREE.Mesh(new THREE.BoxGeometry(.36*sc,.03*sc,.02*sc),new THREE.MeshBasicMaterial({color:0xf08dff}));
+    const rune2=new THREE.Mesh(new THREE.BoxGeometry(.03*sc,.28*sc,.02*sc),new THREE.MeshBasicMaterial({color:0xf08dff}));
+    rune1.position.set(0,.64*sc,.29*sc); rune2.position.set(0,.64*sc,.29*sc);
+    const shoulderL=new THREE.Mesh(new THREE.BoxGeometry(.36*sc,.22*sc,.28*sc),new THREE.MeshLambertMaterial({color:0x8a6738}));
+    const shoulderR=shoulderL.clone();
+    shoulderL.position.set(-.47*sc,.9*sc,.03*sc); shoulderR.position.set(.47*sc,.9*sc,.03*sc);
+    const aura=new THREE.Mesh(new THREE.BoxGeometry(1.05*sc,1.5*sc,.75*sc),new THREE.MeshBasicMaterial({color:0x9d2cff,transparent:true,opacity:.13,side:THREE.BackSide}));
+    aura.position.y=.62*sc;
+    group.add(crown,mask,eyeL,eyeR,core,rune1,rune2,shoulderL,shoulderR,aura);
   }
   group.position.copy(pos);
   scene.add(group);
