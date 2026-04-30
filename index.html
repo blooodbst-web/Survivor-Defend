@@ -1448,7 +1448,8 @@ function updateGrenadeUI(){
 function createEnemy(type,pos){
   const cfg=ENEMY_CFG[type]||ENEMY_CFG.normal;
   const group=new THREE.Group();
-  const mat=new THREE.MeshLambertMaterial({color:cfg.clr,emissive:new THREE.Color(cfg.clr).multiplyScalar(.15)});
+  const baseClr=type==='normal'?0x5a644a:cfg.clr;
+  const mat=new THREE.MeshLambertMaterial({color:baseClr,emissive:new THREE.Color(baseClr).multiplyScalar(.15)});
   const hitMat=new THREE.MeshLambertMaterial({color:0xffffff,emissive:0xffffff,emissiveIntensity:1});
   const transMat=new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false});
   const sc=cfg.sc;
@@ -1466,9 +1467,29 @@ function createEnemy(type,pos){
   const hbArmR=hbArmL.clone();hbArmR.position.x=.47*sc;hbArmR.userData.hz='arm';
   const hbLegL=mkHB(new THREE.BoxGeometry(.32*sc,.62*sc,.32*sc),-.1*sc,'leg');hbLegL.position.x=-.18*sc;
   const hbLegR=hbLegL.clone();hbLegR.position.x=.18*sc;hbLegR.userData.hz='leg';
-  const glow=new THREE.Mesh(new THREE.BoxGeometry(.9*sc,1.15*sc,.58*sc),new THREE.MeshBasicMaterial({color:cfg.clr,transparent:true,opacity:.12,side:THREE.BackSide}));
+  const glow=new THREE.Mesh(new THREE.BoxGeometry(.9*sc,1.15*sc,.58*sc),new THREE.MeshBasicMaterial({color:baseClr,transparent:true,opacity:.12,side:THREE.BackSide}));
   glow.position.y=.53*sc;
   group.add(body,head,armL,armR,legL,legR,hbBody,hbHead,hbArmL,hbArmR,hbLegL,hbLegR,glow);
+  if(type==='normal'){
+    head.geometry=new THREE.BoxGeometry(.44*sc,.44*sc,.44*sc);
+    head.position.y=1.2*sc;
+    const helmet=new THREE.Mesh(new THREE.BoxGeometry(.5*sc,.24*sc,.5*sc),new THREE.MeshLambertMaterial({color:0x646e57}));
+    helmet.position.y=1.37*sc;
+    const visor=new THREE.Mesh(new THREE.BoxGeometry(.26*sc,.06*sc,.03*sc),new THREE.MeshBasicMaterial({color:0x7df6ff}));
+    visor.position.set(0,1.24*sc,.22*sc);
+    const shoulderL=new THREE.Mesh(new THREE.BoxGeometry(.34*sc,.28*sc,.28*sc),new THREE.MeshLambertMaterial({color:0x82878f}));
+    const shoulderR=shoulderL.clone();
+    shoulderL.position.set(-.47*sc,.83*sc,0); shoulderR.position.set(.47*sc,.83*sc,0);
+    const vest=new THREE.Mesh(new THREE.BoxGeometry(.78*sc,.6*sc,.5*sc),new THREE.MeshLambertMaterial({color:0x4f5c42}));
+    vest.position.y=.62*sc;
+    const belt=new THREE.Mesh(new THREE.BoxGeometry(.76*sc,.12*sc,.46*sc),new THREE.MeshLambertMaterial({color:0x4f5c42}));
+    belt.position.y=.18*sc;
+    armL.material=new THREE.MeshLambertMaterial({color:0xc8b49a});
+    armR.material=armL.material;
+    legL.material=new THREE.MeshLambertMaterial({color:0x5a644a});
+    legR.material=legL.material;
+    group.add(helmet,visor,shoulderL,shoulderR,vest,belt);
+  }
   group.position.copy(pos);
   scene.add(group);
   const rMul=Math.min(1+(STATE.round-1)*.12,3.5);
