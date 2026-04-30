@@ -485,8 +485,8 @@ input[type=range]::-webkit-slider-thumb{
         <div class="weapon-slot-ammo" id="slot-ammo-pistol">∞</div>
       </div>
       <div class="weapon-slot active" data-weapon="rifle" id="slot-rifle">
-        <div class="weapon-slot-icon">🏷️AR</div>
-        <div class="weapon-slot-name">RIFLE</div>
+        <div class="weapon-slot-icon">🏷️AWM</div>
+        <div class="weapon-slot-name">AWM</div>
         <div class="weapon-slot-ammo" id="slot-ammo-rifle">30</div>
       </div>
       <div class="weapon-slot" data-weapon="ak47" id="slot-ak47">
@@ -678,7 +678,7 @@ const GRAVITY = 22;
 
 const WEAPON_CFG = {
   pistol:  { name:'PISTOL',  dmg:18,  fire:.22, recoil:.25, spread:.006, scopeFov:60, mag:12, reserve:Infinity, pellets:1,  auto:false, icon:'🔫' },
-  rifle:   { name:'RIFLE',   dmg:25,  fire:.12, recoil:.40, spread:.003, scopeFov:45, mag:30, reserve:180,      pellets:1,  auto:true,  icon:'🪖' },
+  rifle:   { name:'AWM',     dmg:92,  fire:1.05,recoil:1.05,spread:.0018,scopeFov:22, mag:5,  reserve:35,       pellets:1,  auto:false, icon:'🎯' },
   ak47:    { name:'AK-47',   dmg:31,  fire:.09, recoil:.55, spread:.007, scopeFov:50, mag:35, reserve:210,      pellets:1,  auto:true,  icon:'⚔️' },
   shotgun: { name:'SHOTGUN', dmg:14,  fire:.55, recoil:.90, spread:.06,  scopeFov:65, mag:8,  reserve:48,       pellets:8,  auto:false, icon:'💥' },
 };
@@ -717,7 +717,7 @@ const PLAYER = {
   weapon:'rifle',
   weapons:{
     pistol: { ammo:12, reserve:Infinity },
-    rifle:  { ammo:30, reserve:180 },
+    rifle:  { ammo:5, reserve:35 },
     ak47:   { ammo:35, reserve:210 },
     shotgun:{ ammo:8,  reserve:48 },
   },
@@ -939,7 +939,7 @@ function buildGunModel(){
 
 const GUN_COLORS={
   pistol:{body:0x2a2a2e,barrel:0x1a1a1e,grip:0x6a4a28},
-  rifle:{body:0x222226,barrel:0x111114,grip:0x4a3320},
+  rifle:{body:0x5b7f56,barrel:0x20252d,grip:0x2b2f34},
   ak47:{body:0x2d1a0a,barrel:0x0a0a0a,grip:0x5a3510},
   shotgun:{body:0x3a2a1a,barrel:0x1a0a00,grip:0x7a4a20},
 };
@@ -990,6 +990,25 @@ function applyWeaponGeometry(w){
     gunParts.frontSight.visible=true; gunParts.frontSight.position.set(0,.095,-1.02);
     gunParts.gasTube.visible=true; gunParts.gasTube.scale.set(.9,.8,2.5); gunParts.gasTube.position.set(0,.0,-.64);
     gunParts.pistolGlow.visible=false;
+  }else if(w==='rifle'){
+    gunParts.body.scale.set(1.65,.8,2.55); gunParts.body.position.set(0,-.01,-.22);
+    gunParts.body.material.color.setHex(0x5b7f56);
+    gunParts.barrel.scale.set(.92,.74,2.9); gunParts.barrel.position.set(0,.045,-1.02);
+    gunParts.barrel.material.color.setHex(0x20252d);
+    gunParts.muzzle.position.set(0,.045,-1.42);
+    gunParts.stock.visible=true; gunParts.stock.scale.set(2.05,1.35,2.6); gunParts.stock.position.set(0,-.03,.36);
+    gunParts.stock.material.color.setHex(0x5b7f56);
+    gunParts.mag.visible=true; gunParts.mag.scale.set(1.05,.95,1.1); gunParts.mag.rotation.x=0; gunParts.mag.position.set(0,-.2,-.2);
+    gunParts.mag.material.color.setHex(0x2a2d33);
+    gunParts.akCurveMag.visible=false;
+    gunParts.foregrip.visible=false;
+    gunParts.grip.scale.set(.9,1.0,.88); gunParts.grip.position.set(0,-.15,.0);
+    gunParts.grip.material.color.setHex(0x2b2f34);
+    gunParts.scope.visible=true; gunParts.scope.scale.set(1.05,1.05,2.8); gunParts.scope.position.set(0,.13,-.42);
+    gunParts.frontSight.visible=false;
+    gunParts.gasTube.visible=true; gunParts.gasTube.scale.set(1,1,2.5); gunParts.gasTube.position.set(0,.08,-.84);
+    gunParts.pistolGlow.visible=false;
+    gunParts.shotgunPump.visible=false;
   }else if(w==='ak47'){
     gunParts.body.scale.set(1.12,.92,1.22); gunParts.body.position.set(0,.005,-.17);
     gunParts.body.material.color.setHex(0x4b4f54);
@@ -1364,7 +1383,7 @@ function reload(){
   const relEl=document.getElementById('reload-progress');
   const fillEl=document.getElementById('reload-progress-fill');
   relEl.style.display='block'; fillEl.style.width='0%';
-  const dur=PLAYER.weapon==='shotgun'?2200:PLAYER.weapon==='ak47'?1800:1500;
+  const dur=PLAYER.weapon==='rifle'?2800:PLAYER.weapon==='shotgun'?2200:PLAYER.weapon==='ak47'?1800:1500;
   const t0=performance.now();
   const currentWeapon=PLAYER.weapon;
   const tick=()=>{
@@ -2253,7 +2272,7 @@ function resetGame(){
   if(autoReloadTimer){clearTimeout(autoReloadTimer);autoReloadTimer=null;}
   PLAYER.recoil=0; PLAYER.damageFlash=0;
   PLAYER.weapon='rifle';
-  PLAYER.weapons={pistol:{ammo:12,reserve:Infinity},rifle:{ammo:30,reserve:180},ak47:{ammo:35,reserve:210},shotgun:{ammo:8,reserve:48}};
+  PLAYER.weapons={pistol:{ammo:12,reserve:Infinity},rifle:{ammo:5,reserve:35},ak47:{ammo:35,reserve:210},shotgun:{ammo:8,reserve:48}};
   PLAYER.effects={speed:0,infAmmo:0,shield:0};
 
   STATE.score=0; STATE.killStreak=0; STATE.totalKills=0;
