@@ -907,10 +907,21 @@ function buildGunModel(){
   const mag=mkBox(.085,.18,.06,0x1a1a1e); mag.position.set(0,-.2,-.12);
   const stock=mkBox(.1,.09,.2,0x333340); stock.position.set(0,.005,.13);
   const foregrip=mkBox(.06,.12,.06,0x1a1a1e); foregrip.position.set(0,-.1,-.35);
+  const akCurveMag=new THREE.Mesh(
+    new THREE.TorusGeometry(.2,.038,8,20,Math.PI*.95),
+    new THREE.MeshLambertMaterial({color:0x3e4348})
+  );
+  akCurveMag.rotation.set(Math.PI*.08,Math.PI*.5,Math.PI*.07);
+  akCurveMag.position.set(0,-.2,-.12);
+  akCurveMag.visible=false;
+  const frontSight=new THREE.Mesh(new THREE.BoxGeometry(.03,.12,.02),new THREE.MeshLambertMaterial({color:0x20242a}));
+  frontSight.position.set(0,.09,-.74);
+  const gasTube=new THREE.Mesh(new THREE.BoxGeometry(.05,.03,.24),new THREE.MeshLambertMaterial({color:0x363b41}));
+  gasTube.position.set(0,.06,-.45);
   const scope=new THREE.Mesh(new THREE.CylinderGeometry(.032,.032,.23,10),new THREE.MeshLambertMaterial({color:0x181818}));
   scope.rotation.x=Math.PI/2; scope.position.set(0,.105,-.2);
-  gunParts={body,barrel,muzzle,grip,mag,stock,scope,foregrip};
-  gunGroup.add(body,barrel,muzzle,grip,mag,stock,scope,foregrip);
+  gunParts={body,barrel,muzzle,grip,mag,stock,scope,foregrip,akCurveMag,frontSight,gasTube};
+  gunGroup.add(body,barrel,muzzle,grip,mag,stock,scope,foregrip,akCurveMag,frontSight,gasTube);
   gunGroup.position.set(.28,-.28,-.5);
   camera.add(gunGroup);
   scene.add(camera);
@@ -949,6 +960,9 @@ function applyWeaponGeometry(w){
     gunParts.stock.visible=false; gunParts.mag.visible=false; gunParts.foregrip.visible=false;
     gunParts.grip.scale.set(.82,1.08,.9); gunParts.grip.position.set(0,-.14,.02);
     gunParts.scope.visible=false;
+    gunParts.akCurveMag.visible=false;
+    gunParts.frontSight.visible=false;
+    gunParts.gasTube.visible=false;
   }else if(w==='shotgun'){
     gunParts.body.scale.set(1.06,.95,1.08); gunParts.body.position.set(0,0,-.2);
     gunParts.barrel.scale.set(1.4,1.2,1.45); gunParts.barrel.position.set(0,.02,-.6);
@@ -957,24 +971,37 @@ function applyWeaponGeometry(w){
     gunParts.mag.visible=false; gunParts.foregrip.visible=true; gunParts.foregrip.position.set(0,-.095,-.46);
     gunParts.grip.scale.set(.98,.95,.95); gunParts.grip.position.set(0,-.13,-.02);
     gunParts.scope.visible=false;
+    gunParts.akCurveMag.visible=false;
+    gunParts.frontSight.visible=true;
+    gunParts.gasTube.visible=false;
   }else if(w==='ak47'){
-    gunParts.body.scale.set(1.02,1,1.08); gunParts.body.position.set(0,0,-.17);
-    gunParts.barrel.scale.set(1,1,1.1); gunParts.barrel.position.set(0,.02,-.52);
-    gunParts.muzzle.position.set(0,.02,-.72);
-    gunParts.stock.visible=true; gunParts.stock.scale.set(1.05,.92,1.2); gunParts.stock.position.set(0,.005,.15);
-    gunParts.mag.visible=true; gunParts.mag.scale.set(1,1.18,1); gunParts.mag.rotation.x=-.24; gunParts.mag.position.set(0,-.2,-.13);
-    gunParts.foregrip.visible=true; gunParts.foregrip.position.set(0,-.1,-.36);
-    gunParts.grip.scale.set(1,.98,1); gunParts.grip.position.set(0,-.145,-.04);
-    gunParts.scope.visible=true; gunParts.scope.position.set(0,.1,-.18);
+    gunParts.body.scale.set(1.12,.92,1.22); gunParts.body.position.set(0,.005,-.17);
+    gunParts.body.material.color.setHex(0x4b4f54);
+    gunParts.barrel.scale.set(1,1,1.2); gunParts.barrel.position.set(0,.03,-.56);
+    gunParts.muzzle.position.set(0,.03,-.78);
+    gunParts.stock.visible=true; gunParts.stock.scale.set(1.52,1.02,1.45); gunParts.stock.position.set(0,-.01,.21);
+    gunParts.stock.material.color.setHex(0xa76633);
+    gunParts.mag.visible=false;
+    gunParts.akCurveMag.visible=true;
+    gunParts.foregrip.visible=true; gunParts.foregrip.scale.set(2.2,1.2,2.4); gunParts.foregrip.position.set(0,-.01,-.43);
+    gunParts.foregrip.material.color.setHex(0xa76633);
+    gunParts.grip.scale.set(1.08,1.08,1.08); gunParts.grip.position.set(0,-.16,-.03);
+    gunParts.grip.material.color.setHex(0xa76633);
+    gunParts.scope.visible=false;
+    gunParts.frontSight.visible=true;
+    gunParts.gasTube.visible=true;
   }else{
     gunParts.body.scale.set(1,1,1); gunParts.body.position.set(0,0,-.15);
     gunParts.barrel.scale.set(1,1,1); gunParts.barrel.position.set(0,.015,-.5);
     gunParts.muzzle.position.set(0,.015,-.7);
     gunParts.stock.visible=true; gunParts.stock.scale.set(1,1,1); gunParts.stock.position.set(0,.005,.13);
     gunParts.mag.visible=true; gunParts.mag.scale.set(1,1,1); gunParts.mag.rotation.x=0; gunParts.mag.position.set(0,-.2,-.12);
+    gunParts.akCurveMag.visible=false;
     gunParts.foregrip.visible=true; gunParts.foregrip.position.set(0,-.1,-.35);
     gunParts.grip.scale.set(1,1,1); gunParts.grip.position.set(0,-.15,-.03);
     gunParts.scope.visible=true; gunParts.scope.position.set(0,.105,-.2);
+    gunParts.frontSight.visible=true;
+    gunParts.gasTube.visible=true;
   }
 }
 
