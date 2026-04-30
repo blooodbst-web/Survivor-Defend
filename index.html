@@ -722,6 +722,7 @@ const PLAYER = {
     shotgun:{ ammo:8,  reserve:48 },
   },
   effects:{ speed:0, infAmmo:0, shield:0 },
+  switching:false, switchT:0, pendingWeapon:null,
 };
 
 const SETTINGS = {
@@ -856,21 +857,16 @@ function syncOut(){
 
 function selectWeapon(name){
   if(!WEAPON_CFG[name])return;
+  if(PLAYER.switching){PLAYER.pendingWeapon=name;return;}
   if(PLAYER.reloading){
     PLAYER.reloadAborted=true;
     PLAYER.reloading=false;
     document.getElementById('reload-progress').style.display='none';
   }
-  syncOut();
-  PLAYER.weapon=name;
-  syncIn();
+  PLAYER.switching=true;
+  PLAYER.switchT=0;
+  PLAYER.pendingWeapon=name;
   setScoped(false);
-  updateUI();
-  if(gunGroup){
-    gunGroup.position.y=-0.28;
-    gunGroup.position.z=-0.5;
-  }
-  updateGunModel();
 }
 
 // ============================================================
@@ -1041,6 +1037,16 @@ function initArena(){
 function addBox(pos,sz,mat,isWall=false){
   const m=new THREE.Mesh(new THREE.BoxGeometry(...sz),mat);
   m.position.set(...pos); m.castShadow=!isWall; m.receiveShadow=true; scene.add(m);
+  const top=new THREE.Mesh(
+    new THREE.PlaneGeometry(sz[0]*.94,sz[2]*.94),
+    new THREE.MeshLambertMaterial({color:isWall?0xa9bbcc:0xc3a17d,transparent:true,opacity:isWall?.2:.16})
+  );
+  top.rotation.x=-Math.PI/2; top.position.set(pos[0],pos[1]+sz[1]/2+.01,pos[2]); top.receiveShadow=true; scene.add(top);
+  const edge=new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(...sz)),
+    new THREE.LineBasicMaterial({color:isWall?0x8fb0cf:0xd0af82,transparent:true,opacity:.32})
+  );
+  edge.position.set(...pos); scene.add(edge);
   const hx=sz[0]/2, hy=sz[1]/2, hz=sz[2]/2;
   obstacles.push({min:new THREE.Vector3(pos[0]-hx,0,pos[2]-hz),max:new THREE.Vector3(pos[0]+hx,pos[1]+hy,pos[2]+hz)});
 }
@@ -1153,6 +1159,28 @@ function updatePlayer(dt){
     gunGroup.rotation.x=PLAYER.recoil*.55;
     gunGroup.position.z=-.5+PLAYER.recoil*.12;
   }else{gunGroup.rotation.x=0;gunGroup.position.z=-.5;}
+  if(PLAYER.switching&&gunGroup){
+    PLAYER.switchT=Math.min(1,PLAYER.switchT+dt*5.4);
+    const t=PLAYER.switchT;
+    if(t<.5){
+      const p=t/.5;
+      gunGroup.position.y=-.28+p*.42;
+      gunGroup.rotation.z=-p*.45;
+    }else{
+      if(PLAYER.pendingWeapon){
+        syncOut();
+        PLAYER.weapon=PLAYER.pendingWeapon;
+        PLAYER.pendingWeapon=null;
+        syncIn();
+        updateGunModel();
+        updateUI();
+      }
+      const p=(t-.5)/.5;
+      gunGroup.position.y=.14-p*.42;
+      gunGroup.rotation.z=-(1-p)*.45;
+      if(t>=1){PLAYER.switching=false; gunGroup.position.y=-.28; gunGroup.rotation.z=0;}
+    }
+  }
   if(PLAYER.damageFlash>0){
     PLAYER.damageFlash-=dt;
     const i=Math.max(0,PLAYER.damageFlash);
@@ -1625,6 +1653,14 @@ function spawnEnemyBullet(from,to,dmg){
   mesh.position.copy(from); scene.add(mesh);
   const vel=to.clone().sub(from).normalize().multiplyScalar(34);
   enemyBullets.push({mesh,vel,life:1.5,dmg});
+  spawnEnemyMuzzleFx(from.clone());
+}
+
+function spawnEnemyMuzzleFx(pos){
+  const flash=new THREE.Mesh(new THREE.SphereGeometry(.12,7,6),new THREE.MeshBasicMaterial({color:0xffb06a,transparent:true,opacity:.88,depthWrite:false}));
+  flash.position.copy(pos);
+  scene.add(flash);
+  particles.push({mesh:flash,vel:new THREE.Vector3((Math.random()-.5)*.2,.05,(Math.random()-.5)*.2),life:.09,maxLife:.09});
 }
 
 function updateEnemyBullets(dt){
