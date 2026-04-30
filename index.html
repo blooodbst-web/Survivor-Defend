@@ -687,7 +687,7 @@ const ENEMY_CFG = {
   normal:{ hp:100, spd:2.5, dmg:10, clr:0xdd2233, sc:1.0,  rng:17, atk:1.1 },
   fast:  { hp:55,  spd:4.5, dmg:7,  clr:0xff7722, sc:0.85, rng:14, atk:0.75 },
   tank:  { hp:260, spd:1.4, dmg:18, clr:0x9922cc, sc:1.3,  rng:19, atk:1.4 },
-  sniper:{ hp:80,  spd:1.8, dmg:36, clr:0x2266ff, sc:0.95, rng:36, atk:1.8 },
+  sniper:{ hp:80,  spd:1.8, dmg:24, clr:0x2266ff, sc:0.95, rng:36, atk:1.8 },
   boss:  { hp:1600,spd:1.5, dmg:24, clr:0x35a2ff, sc:1.9,  rng:28, atk:1.2 },
 };
 
@@ -1528,6 +1528,23 @@ function createEnemy(type,pos){
     const aura=new THREE.Mesh(new THREE.BoxGeometry(1.05*sc,1.5*sc,.75*sc),new THREE.MeshBasicMaterial({color:0x9d2cff,transparent:true,opacity:.13,side:THREE.BackSide}));
     aura.position.y=.62*sc;
     group.add(crown,mask,eyeL,eyeR,core,rune1,rune2,shoulderL,shoulderR,aura);
+  }
+  if(type==='fast'){
+    body.material=new THREE.MeshLambertMaterial({color:0x8f8364});
+    head.material=body.material;
+    const visor=new THREE.Mesh(new THREE.BoxGeometry(.22*sc,.06*sc,.03*sc),new THREE.MeshBasicMaterial({color:0xffea3b}));
+    visor.position.set(0,1.23*sc,.23*sc);
+    const core=new THREE.Mesh(new THREE.OctahedronGeometry(.13*sc,0),new THREE.MeshBasicMaterial({color:0xffd933}));
+    core.position.set(0,.58*sc,.24*sc);
+    const shoulderL=new THREE.Mesh(new THREE.BoxGeometry(.32*sc,.26*sc,.28*sc),new THREE.MeshLambertMaterial({color:0x8f8364}));
+    const shoulderR=shoulderL.clone();
+    shoulderL.position.set(-.47*sc,.83*sc,.02*sc); shoulderR.position.set(.47*sc,.83*sc,.02*sc);
+    const boltL=new THREE.Mesh(new THREE.BoxGeometry(.02*sc,.42*sc,.02*sc),new THREE.MeshBasicMaterial({color:0xffe640}));
+    const boltR=boltL.clone();
+    boltL.position.set(-.18*sc,-.14*sc,.2*sc); boltR.position.set(.18*sc,-.14*sc,.2*sc);
+    const aura=new THREE.Mesh(new THREE.BoxGeometry(.95*sc,1.25*sc,.7*sc),new THREE.MeshBasicMaterial({color:0xffdf3f,transparent:true,opacity:.1,side:THREE.BackSide}));
+    aura.position.y=.48*sc;
+    group.add(visor,core,shoulderL,shoulderR,boltL,boltR,aura);
   }
   group.position.copy(pos);
   scene.add(group);
