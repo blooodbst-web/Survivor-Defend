@@ -278,7 +278,6 @@ canvas{display:block;position:absolute;top:0;left:0}
   letter-spacing:2px;transition:transform .1s,box-shadow .1s;
 }
 #restart-btn:active{transform:scale(0.95);box-shadow:0 2px 10px rgba(255,40,60,0.4)}
-
 /* ── START SCREEN ── */
 #start-screen{
   position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
@@ -403,7 +402,7 @@ input[type=range]::-webkit-slider-thumb{
 #edit-overlay{
   position:absolute;top:0;left:0;right:0;bottom:0;z-index:26;
   display:none;background:rgba(0,0,0,0.35);
-  pointer-events:auto;touch-action:none;
+  pointer-events:none;touch-action:none;
 }
 #edit-label{
   position:absolute;top:64px;left:50%;transform:translateX(-50%);
@@ -412,14 +411,14 @@ input[type=range]::-webkit-slider-thumb{
   font-size:12px;letter-spacing:1px;pointer-events:none;white-space:nowrap;
 }
 #edit-done-btn{
-  position:absolute;bottom:20px;left:50%;transform:translateX(-50%);
+  position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:28;
   background:rgba(240,192,64,0.9);color:#000;border:none;
   padding:12px 32px;border-radius:10px;font-weight:700;
   font-family:'Orbitron',monospace;font-size:13px;letter-spacing:1px;
   cursor:pointer;pointer-events:auto;touch-action:auto;
   box-shadow:0 4px 16px rgba(240,192,64,0.4);
 }
-.editable.editing{box-shadow:0 0 0 2px #f0c040,0 0 16px rgba(240,192,64,0.4)!important;border-radius:8px;cursor:grab}
+.editable.editing{box-shadow:0 0 0 2px #f0c040,0 0 16px rgba(240,192,64,0.4)!important;border-radius:8px;cursor:grab;z-index:27!important;pointer-events:auto!important}
 
 @media(max-height:680px){
   #settings-panel{
@@ -478,7 +477,7 @@ input[type=range]::-webkit-slider-thumb{
     </div>
 
     <!-- WEAPON BAR -->
-    <div id="weapon-bar">
+    <div id="weapon-bar" class="editable">
       <div class="weapon-slot" data-weapon="pistol" id="slot-pistol">
         <div class="weapon-slot-icon">🅿️</div>
         <div class="weapon-slot-name">PISTOL</div>
@@ -739,6 +738,7 @@ const SETTINGS = {
     'reload-btn':{right:22,bottom:196},
     'grenade-btn':{right:210,bottom:110},
     'settings-btn':{left:14,topPct:true},
+    'weapon-bar':{centerX:true,bottom:14},
   },
 };
 
@@ -2532,6 +2532,7 @@ function setupEditDrag(){
     'fire-btn':'fire-btn','jump-btn':'jump-btn',
     'scope-btn':'scope-btn','reload-btn':'reload-btn',
     'grenade-btn':'grenade-btn','settings-btn':'settings-btn',
+    'weapon-bar':'weapon-bar',
   };
 
   for(const[id,key] of Object.entries(draggableMap)){
@@ -2713,21 +2714,19 @@ function applyLayout(){
     'fire-btn':'fire-btn','jump-btn':'jump-btn',
     'scope-btn':'scope-btn','reload-btn':'reload-btn',
     'grenade-btn':'grenade-btn','settings-btn':'settings-btn',
+    'weapon-bar':'weapon-bar',
   };
   for(const[id,key]of Object.entries(elMap)){
     const el=document.getElementById(id), p=SETTINGS.layout[key];
     if(!el||!p)continue;
     el.style.position='absolute';
-    el.style.left=typeof p.left==='number'?p.left+'px':'';
+    el.style.left=typeof p.left==='number'?p.left+'px':p.centerX?'50%':'';
     el.style.right=typeof p.right==='number'?p.right+'px':'';
-    el.style.top=typeof p.top==='number'?p.top+'px':'';
+    el.style.top=typeof p.top==='number'?p.top+'px':p.topPct?'50%':'';
     el.style.bottom=typeof p.bottom==='number'?p.bottom+'px':'';
-    // Settings btn uses CSS transform for vertical center if default
-    if(id==='settings-btn'&&typeof p.left==='number'&&typeof p.top==='undefined'){
-      el.style.transform='translateY(-50%)';
-    }else if(id==='settings-btn'&&typeof p.top==='number'){
-      el.style.transform='none';
-    }
+    const tx=p.centerX?'translateX(-50%)':'';
+    const ty=p.topPct?'translateY(-50%)':'';
+    el.style.transform=[tx,ty].filter(Boolean).join(' ')||'none';
   }
   applyJoySize();
 }
@@ -2741,7 +2740,8 @@ function resetLayout(){
     'scope-btn':{right:126,bottom:180},
     'reload-btn':{right:22,bottom:196},
     'grenade-btn':{right:210,bottom:110},
-    'settings-btn':{left:14},
+    'settings-btn':{left:14,topPct:true},
+    'weapon-bar':{centerX:true,bottom:14},
   };
   SETTINGS.joystickSize=130;
   document.getElementById('joy-slider').value=130;
