@@ -278,23 +278,6 @@ canvas{display:block;position:absolute;top:0;left:0}
   letter-spacing:2px;transition:transform .1s,box-shadow .1s;
 }
 #restart-btn:active{transform:scale(0.95);box-shadow:0 2px 10px rgba(255,40,60,0.4)}
-#reward-revive-btn{
-  margin-top:14px;padding:14px 28px;font-size:15px;font-weight:800;
-  background:linear-gradient(135deg,#34e38a,#13a8ff);color:#041018;
-  border:none;border-radius:10px;cursor:pointer;pointer-events:auto;touch-action:auto;
-  box-shadow:0 4px 20px rgba(19,168,255,0.35);font-family:'Orbitron',monospace;
-  letter-spacing:1.5px;transition:transform .1s,filter .1s,opacity .1s;
-}
-#reward-revive-btn:active{transform:scale(0.96);filter:brightness(1.08)}
-#reward-revive-btn:disabled{opacity:.45;filter:grayscale(.25);cursor:not-allowed}
-#ad-status{
-  min-height:18px;margin-top:10px;color:rgba(255,255,255,.62);font-size:12px;
-  text-align:center;font-family:'Rajdhani',sans-serif;font-weight:600;letter-spacing:.4px;
-}
-#ad-status.ready{color:#4af0a0}
-#ad-status.loading{color:#f0c040}
-#ad-status.error{color:#ff6677}
-
 /* ── START SCREEN ── */
 #start-screen{
   position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
@@ -589,8 +572,6 @@ input[type=range]::-webkit-slider-thumb{
     <div class="go-stat">HIGH SCORE: <span id="go-highscore">0</span></div>
     <div class="go-stat">ROUND REACHED: <span id="go-round">0</span></div>
     <div class="go-stat">ENEMIES KILLED: <span id="go-kills">0</span></div>
-    <button id="reward-revive-btn">🎬 WATCH AD TO REVIVE</button>
-    <div id="ad-status"></div>
     <button id="restart-btn">PLAY AGAIN</button>
   </div>
   <div id="boss-reward" class="boss-reward">
@@ -694,16 +675,6 @@ import * as THREE from 'https://unpkg.com/three@0.161.0/build/three.module.js';
 const ARENA = 48;
 const GRAVITY = 22;
 
-const ADMOB_CONFIG = {
-  appId:'ca-app-pub-4122791238302384~1881989116',
-  rewardedAdUnitId:'ca-app-pub-4122791238302384/2453824433',
-  testRewardedAdUnitId:'ca-app-pub-3940256099942544/5224354917',
-  useTestAds:false,
-  placements:{
-    revive:'reward_revive',
-  },
-};
-
 const WEAPON_CFG = {
   pistol:  { name:'PISTOL',  dmg:18,  fire:.22, recoil:.25, spread:.006, scopeFov:60, mag:12, reserve:Infinity, pellets:1,  auto:false, icon:'🔫' },
   rifle:   { name:'AWM',     dmg:128, fire:1.05,recoil:1.05,spread:.0018,scopeFov:22, mag:5,  reserve:35,       pellets:1,  auto:false, icon:'🎯' },
@@ -729,7 +700,7 @@ const STATE = {
   killStreak:0, lastKillTime:0, lastSpawnTime:0, spawnCooldown:1.6,
   grenades:3,
   graceUntil:0, recentDamageHits:0, lastDamageAt:0, forceMedkitDrop:false,
-  bossWaveActive:false, pendingBossReward:false, rewardReviveUsed:false,
+  bossWaveActive:false, pendingBossReward:false,
 };
 
 const PLAYER = {
@@ -866,62 +837,6 @@ function stopHeartbeat(){
 }
 
 function vib(ms){if(SETTINGS.vibration&&navigator.vibrate)navigator.vibrate(ms);}
-
-// ============================================================
-// ADMOB REWARDED AD BRIDGE
-// ============================================================
-const RewardedAds={
-  pending:null,
-  get adUnitId(){return ADMOB_CONFIG.useTestAds?ADMOB_CONFIG.testRewardedAdUnitId:ADMOB_CONFIG.rewardedAdUnitId;},
-  get bridge(){return window.SurvivorDefendAds||window.AndroidAdBridge||null;},
-  isNativeReady(){return !!(this.bridge&&typeof this.bridge.showRewardedAd==='function');},
-  show(placement){
-    if(this.pending)return Promise.resolve({status:'busy'});
-    this.setStatus('Memuat iklan reward...', 'loading');
-    return new Promise(resolve=>{
-      this.pending={
-        placement,
-        resolve,
-        timeout:setTimeout(()=>this.finish({status:'timeout'}),30000),
-      };
-      const btn=document.getElementById('reward-revive-btn');
-      if(btn)btn.disabled=true;
-      if(this.isNativeReady()){
-        const payload=JSON.stringify({placement,adUnitId:this.adUnitId,appId:ADMOB_CONFIG.appId});
-        const result=this.bridge.showRewardedAd(payload);
-        if(result&&typeof result.then==='function'){
-          result.then(data=>this.finish(data)).catch(()=>this.finish({status:'error'}));
-        }
-      }else{
-        this.setStatus('Mode browser: simulasi iklan reward...', 'loading');
-        setTimeout(()=>this.finish({status:'rewarded',placement,mock:true}),900);
-      }
-    });
-  },
-  finish(result={}){
-    if(!this.pending)return;
-    const pending=this.pending;
-    if(pending.timeout)clearTimeout(pending.timeout);
-    this.pending=null;
-    pending.resolve({...result,placement:result.placement||pending.placement});
-  },
-  setStatus(text='',cls=''){
-    const el=document.getElementById('ad-status');
-    if(!el)return;
-    el.textContent=text;
-    el.className=cls;
-  },
-};
-
-window.SurvivorDefendAdCallbacks={
-  rewarded:(result)=>RewardedAds.finish(typeof result==='string'?{status:result}:result),
-  closed:()=>RewardedAds.finish({status:'closed'}),
-  failed:(message)=>RewardedAds.finish({status:'error',message}),
-};
-
-function rewardWasEarned(result){
-  return result?.status==='rewarded'||result?.rewarded===true||result?.type==='rewarded';
-}
 
 // ============================================================
 // WEAPON HELPERS
@@ -2354,53 +2269,6 @@ function setScoped(en){
 // ============================================================
 // GAME OVER / RESET
 // ============================================================
-function clearCombatEntities(){
-  enemies.forEach(e=>scene.remove(e.group)); enemies.length=0;
-  enemyBullets.forEach(b=>scene.remove(b.mesh)); enemyBullets.length=0;
-  hpBars.forEach(b=>b.wrap.remove()); hpBars.clear();
-}
-
-function updateRewardReviveUI(){
-  const btn=document.getElementById('reward-revive-btn');
-  if(!btn)return;
-  const used=STATE.rewardReviveUsed;
-  btn.disabled=used||!!RewardedAds.pending;
-  btn.textContent=used?'REVIVE USED':'🎬 WATCH AD TO REVIVE';
-  if(!used&&!RewardedAds.pending){
-    RewardedAds.setStatus(RewardedAds.isNativeReady()?'Reward ad siap dari Android bridge.':'Browser preview memakai simulasi reward.', 'ready');
-  }
-}
-
-function reviveFromRewardedAd(){
-  STATE.rewardReviveUsed=true;
-  STATE.gameOver=false; STATE.running=true; STATE.paused=false; STATE.betweenRounds=false;
-  STATE.graceUntil=performance.now()/1000+3; STATE.lastSpawnTime=0;
-  PLAYER.pos.set(0,PLAYER.height,0); PLAYER.vel.set(0,0,0);
-  PLAYER.hp=Math.max(60,Math.ceil(PLAYER.maxHp*.6));
-  PLAYER.effects.shield=Math.max(PLAYER.effects.shield,10);
-  PLAYER.reloading=false; PLAYER.reloadAborted=true; PLAYER.damageFlash=0;
-  clearCombatEntities();
-  document.getElementById('game-over').style.display='none';
-  document.getElementById('damage-overlay').style.boxShadow='none';
-  setScoped(false); syncIn(); updateGunModel(); updateGrenadeUI(); updateUI();
-  if(audioCtx?.state==='suspended')audioCtx.resume();
-  spawnFloatingText('REVIVED!',PLAYER.pos.clone().add(new THREE.Vector3(0,.9,0)),'#4af0a0');
-  setTimeout(()=>{PLAYER.reloadAborted=false;},50);
-}
-
-async function requestRewardRevive(){
-  if(STATE.rewardReviveUsed||RewardedAds.pending)return;
-  updateRewardReviveUI();
-  const result=await RewardedAds.show(ADMOB_CONFIG.placements.revive);
-  if(rewardWasEarned(result)){
-    RewardedAds.setStatus(result.mock?'Simulasi selesai: revive diberikan.':'Reward diterima: revive diberikan.', 'ready');
-    reviveFromRewardedAd();
-  }else{
-    RewardedAds.setStatus('Iklan belum selesai, revive tidak diberikan.', 'error');
-    updateRewardReviveUI();
-  }
-}
-
 function triggerGameOver(){
   STATE.gameOver=true; STATE.running=false;
   stopHeartbeat();
@@ -2416,7 +2284,6 @@ function triggerGameOver(){
   document.getElementById('go-kills').textContent=STATE.totalKills;
   document.getElementById('game-over').style.display='flex';
   document.getElementById('reload-progress').style.display='none';
-  updateRewardReviveUI();
   if(audioCtx?.state==='running')audioCtx.suspend();
   setScoped(false);
   hpBars.forEach(b=>b.wrap.remove()); hpBars.clear();
@@ -2449,8 +2316,7 @@ function resetGame(){
   STATE.gameOver=false; STATE.betweenRounds=false; STATE.paused=false; STATE.lastSpawnTime=0;
   STATE.grenades=3; STATE.graceUntil=performance.now()/1000+2;
   STATE.recentDamageHits=0; STATE.lastDamageAt=0; STATE.forceMedkitDrop=false;
-  STATE.bossWaveActive=false; STATE.pendingBossReward=false; STATE.rewardReviveUsed=false;
-  RewardedAds.pending=null; RewardedAds.setStatus('', '');
+  STATE.bossWaveActive=false; STATE.pendingBossReward=false;
 
   document.getElementById('game-over').style.display='none';
   document.getElementById('boss-reward').style.display='none';
@@ -3043,11 +2909,6 @@ function init(){
     resetGame();
   });
   document.getElementById('restart-btn').addEventListener('touchstart',e=>{e.stopPropagation();},{passive:true});
-
-  document.getElementById('reward-revive-btn').addEventListener('click',e=>{
-    e.preventDefault(); initAudio(); requestRewardRevive();
-  });
-  document.getElementById('reward-revive-btn').addEventListener('touchstart',e=>{e.stopPropagation();},{passive:true});
 
   // ── Mouse / keyboard for desktop testing ──
   document.getElementById('game-canvas').addEventListener('mousedown',e=>{
